@@ -1,0 +1,54 @@
+{
+  "displayName": "oci-splunk-stack",
+  "description": "OCI Logging -> Streaming -> Splunk via Kafka Connect",
+  "configSource": {
+    "configSourceType": "ZIP_UPLOAD"
+  },
+  "variables": {
+    "region": "eu-frankfurt-1",
+    "compartment_ocid": "ocid1.compartment.oc1..replace_me",
+    "project_prefix": "oci-splunk",
+
+    "use_existing_network": "false",
+    "existing_vcn_id": "",
+    "existing_subnet_id": "",
+    "existing_nsg_id": "",
+    "allowed_ingress_cidr": "x.x.x.x/32",
+
+    "use_existing_splunk": "false",
+    "existing_splunk_web_url": "",
+    "splunk_shape": "VM.Standard.E5.Flex",
+    "splunk_ocpus": "1",
+    "splunk_memory_gb": "8",
+    "splunk_boot_volume_gb": "100",
+    "splunk_image_ocid": "",
+
+    "ssh_public_key": "ssh-ed25519 AAAA...replace_me",
+    "splunk_admin_password": "replace_me_secure",
+    "splunk_hec_token": "replace_me_or_temp",
+    "splunk_hec_url": "https://127.0.0.1:8088/services/collector/event",
+    "splunk_hec_index": "main",
+
+    "existing_stream_pool_id": "",
+    "existing_stream_id": "",
+    "stream_pool_name": "oci-splunk-pool",
+    "stream_name": "oci-splunk-stream",
+    "stream_partitions": "1",
+    "stream_retention_hours": "24",
+
+    "create_logs_to_stream_connector": "true",
+    "log_group_ocid": "ocid1.loggroup.oc1..replace_me",
+    "log_ocid": "ocid1.log.oc1..replace_me",
+
+    "create_kafka_connect_internal_streams": "false",
+
+    "kafka_bootstrap_servers": "cell-1.streaming.eu-frankfurt-1.oci.oraclecloud.com:9092",
+    "streaming_tenancy_name": "replace_me",
+    "streaming_user_name": "replace_me",
+    "streaming_auth_token": "replace_me_secure"
+  },
+  "freeformTags": {
+    "project": "oci-splunk",
+    "managed-by": "resource-manager"
+  }
+}

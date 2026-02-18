@@ -1,0 +1,20 @@
+{
+  "name": "oci-stream-to-splunk",
+  "config": {
+    "connector.class": "com.splunk.kafka.connect.SplunkSinkConnector",
+    "tasks.max": "1",
+    "topics": "${topic_name}",
+    "splunk.hec.uri": "${splunk_hec_uri}",
+    "splunk.hec.token": "${splunk_hec_token}",
+    "splunk.indexes": "${splunk_hec_index}",
+    "splunk.hec.ssl.validate.certs": "false",
+    "splunk.hec.raw": "false",
+    "splunk.hec.ack.enabled": "false",
+    "splunk.hec.max.outstanding.events": "10000",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "errors.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true"
+  }
+}

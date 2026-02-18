@@ -1,0 +1,233 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee /var/log/oci-splunk-bootstrap.log | logger -t oci-splunk-bootstrap -s 2>/dev/console) 2>&1
+
+SPLUNK_ADMIN_PASSWORD="$(printf '%s' '${splunk_admin_password_b64}' | base64 -d)"
+SPLUNK_HEC_TOKEN="$(printf '%s' '${splunk_hec_token_b64}' | base64 -d)"
+STREAMING_AUTH_TOKEN="$(printf '%s' '${streaming_auth_token_b64}' | base64 -d)"
+SPLUNK_HEC_INDEX='${splunk_hec_index}'
+SPLUNK_HEC_URI='${splunk_hec_uri}'
+STREAM_NAME='${stream_name}'
+BOOTSTRAP_SERVERS='${kafka_bootstrap_servers}'
+STREAM_POOL_ID='${stream_pool_id}'
+TENANCY_NAME='${streaming_tenancy_name}'
+STREAMING_USER_NAME='${streaming_user_name}'
+CONNECT_OFFSET_FILE='/var/lib/kafka-connect/offsets.dat'
+
+SPLUNK_VERSION='10.2.0'
+SPLUNK_BUILD='d749cb17ea65'
+SPLUNK_RPM_URL="https://download.splunk.com/products/splunk/releases/$${SPLUNK_VERSION}/linux/splunk-$${SPLUNK_VERSION}-$${SPLUNK_BUILD}.x86_64.rpm"
+SPLUNK_DEB_URL="https://download.splunk.com/products/splunk/releases/$${SPLUNK_VERSION}/linux/splunk-$${SPLUNK_VERSION}-$${SPLUNK_BUILD}-linux-2.6-amd64.deb"
+SPLUNK_RPM="/tmp/splunk-$${SPLUNK_VERSION}-$${SPLUNK_BUILD}.x86_64.rpm"
+SPLUNK_DEB="/tmp/splunk-$${SPLUNK_VERSION}-$${SPLUNK_BUILD}-linux-2.6-amd64.deb"
+KAFKA_VERSION='3.9.1'
+KAFKA_SCALA='2.13'
+KAFKA_ARCHIVE="/tmp/kafka_$${KAFKA_SCALA}-$${KAFKA_VERSION}.tgz"
+KAFKA_HOME='/opt/kafka'
+KAFKA_CONNECT_PLUGIN_DIR='/opt/kafka/plugins'
+SPLUNK_CONNECTOR_JAR_URL='https://github.com/splunk/kafka-connect-splunk/releases/download/v2.2.4/splunk-kafka-connect-v2.2.4.jar'
+SPLUNK_CONNECTOR_JAR='/opt/kafka/plugins/splunk-kafka-connect-v2.2.4.jar'
+
+retry() {
+  local attempts="$1"
+  shift
+  local n=1
+  until "$@"; do
+    if [[ $n -ge $attempts ]]; then
+      return 1
+    fi
+    sleep $((n * 3))
+    n=$((n + 1))
+  done
+}
+
+wait_for_port() {
+  local host="$1"
+  local port="$2"
+  local timeout_seconds="$3"
+  local waited=0
+  while ! (echo >"/dev/tcp/$host/$port") >/dev/null 2>&1; do
+    sleep 2
+    waited=$((waited + 2))
+    if [[ $waited -ge $timeout_seconds ]]; then
+      return 1
+    fi
+  done
+}
+
+run_as_splunk() {
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u splunk -- "$@"
+  else
+    su -s /bin/bash splunk -c "$(printf '%q ' "$@")"
+  fi
+}
+
+install_prereqs() {
+  if command -v dnf >/dev/null 2>&1; then
+    dnf install -y wget tar gzip java-17-openjdk-headless curl jq
+    systemctl disable --now firewalld >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y wget tar gzip openjdk-17-jre-headless curl jq ca-certificates
+    systemctl disable --now ufw >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  echo "Unsupported package manager: expected dnf or apt-get"
+  return 1
+}
+
+install_splunk() {
+  if [[ -x /opt/splunk/bin/splunk ]]; then
+    return 0
+  fi
+
+  if command -v dnf >/dev/null 2>&1; then
+    retry 5 wget --tries=3 --timeout=30 -O "$SPLUNK_RPM" "$SPLUNK_RPM_URL"
+    retry 10 dnf install -y "$SPLUNK_RPM"
+    return 0
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    retry 5 wget --tries=3 --timeout=30 -O "$SPLUNK_DEB" "$SPLUNK_DEB_URL"
+    retry 10 apt-get install -y "$SPLUNK_DEB"
+    return 0
+  fi
+
+  echo "Unsupported package manager for Splunk install"
+  return 1
+}
+
+install_prereqs
+install_splunk
+
+NOLOGIN_BIN="$(command -v nologin || echo /usr/sbin/nologin)"
+id -u splunk >/dev/null 2>&1 || useradd --system --create-home --home-dir /opt/splunk --shell "$NOLOGIN_BIN" splunk
+chown -R splunk:splunk /opt/splunk
+
+mkdir -p /opt/splunk/etc/system/local
+cat >/opt/splunk/etc/system/local/user-seed.conf <<EOF_SEED
+[user_info]
+USERNAME = admin
+PASSWORD = $SPLUNK_ADMIN_PASSWORD
+EOF_SEED
+chown splunk:splunk /opt/splunk/etc/system/local/user-seed.conf
+
+run_as_splunk /opt/splunk/bin/splunk start --accept-license --answer-yes --no-prompt
+/opt/splunk/bin/splunk enable boot-start -user splunk --accept-license --answer-yes
+
+mkdir -p /opt/splunk/etc/apps/splunk_httpinput/local
+run_as_splunk /opt/splunk/bin/splunk http-event-collector enable \
+  -uri https://127.0.0.1:8089 \
+  -port 8088 \
+  -enable-ssl 0 \
+  -auth "admin:$SPLUNK_ADMIN_PASSWORD" >/tmp/hec-enable.log 2>&1 || true
+
+if [[ "$SPLUNK_HEC_TOKEN" == "replace-with-hec-token" || "$SPLUNK_HEC_TOKEN" == "TEMP_HEC_TOKEN_TO_REPLACE" ]]; then
+  SPLUNK_HEC_TOKEN=""
+fi
+
+if [[ -z "$SPLUNK_HEC_TOKEN" ]]; then
+  run_as_splunk /opt/splunk/bin/splunk http-event-collector create oci-kafka-hec \
+    -uri https://127.0.0.1:8089 \
+    -description "OCI Kafka HEC token" \
+    -index "$SPLUNK_HEC_INDEX" \
+    -sourcetype "oci:log" \
+    -auth "admin:$SPLUNK_ADMIN_PASSWORD" \
+    -disabled 0 >/tmp/hec-create.log 2>&1 || true
+  SPLUNK_HEC_TOKEN="$(sed -n '/^\[http:\/\/oci-kafka-hec\]/,/^\[/ s/^token = //p' /opt/splunk/etc/apps/splunk_httpinput/local/inputs.conf | head -n1 | tr -d '[:space:]')"
+fi
+
+if [[ -z "$SPLUNK_HEC_TOKEN" ]]; then
+  SPLUNK_HEC_TOKEN="$(cat /proc/sys/kernel/random/uuid)"
+fi
+
+cat >/opt/splunk/etc/apps/splunk_httpinput/local/inputs.conf <<EOF_INPUT
+[http]
+disabled = 0
+enableSSL = 0
+port = 8088
+
+[http://oci-kafka-hec]
+disabled = 0
+token = $SPLUNK_HEC_TOKEN
+index = $SPLUNK_HEC_INDEX
+sourcetype = oci:log
+EOF_INPUT
+chown -R splunk:splunk /opt/splunk/etc/apps/splunk_httpinput/local
+
+mkdir -p /opt/oci-splunk
+cat >/opt/oci-splunk/runtime.env <<EOF_RUNTIME
+SPLUNK_HEC_TOKEN=$SPLUNK_HEC_TOKEN
+SPLUNK_HEC_URL=http://127.0.0.1:8088/services/collector/event
+EOF_RUNTIME
+chmod 600 /opt/oci-splunk/runtime.env
+
+run_as_splunk /opt/splunk/bin/splunk restart --answer-yes --no-prompt
+wait_for_port 127.0.0.1 8000 300
+wait_for_port 127.0.0.1 8088 300
+
+if [[ ! -x "$KAFKA_HOME/bin/connect-standalone.sh" ]]; then
+  retry 5 wget --tries=3 --timeout=30 -O "$KAFKA_ARCHIVE" "https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_$KAFKA_SCALA-$KAFKA_VERSION.tgz"
+  tar -xzf "$KAFKA_ARCHIVE" -C /opt
+  rm -rf "$KAFKA_HOME"
+  mv "/opt/kafka_$KAFKA_SCALA-$KAFKA_VERSION" "$KAFKA_HOME"
+fi
+
+mkdir -p "$KAFKA_CONNECT_PLUGIN_DIR"
+retry 5 wget --tries=3 --timeout=30 -O "$SPLUNK_CONNECTOR_JAR" "$SPLUNK_CONNECTOR_JAR_URL"
+
+SASL_USERNAME="$TENANCY_NAME/$STREAMING_USER_NAME/$STREAM_POOL_ID"
+
+# Standalone mode: offsets stored locally, no compacted-topic dependency on OCI Streaming.
+mkdir -p "$(dirname "$CONNECT_OFFSET_FILE")"
+
+cat >"$KAFKA_HOME/config/connect-standalone-oci.properties" <<EOF_CONNECT
+# Kafka Connect Standalone Mode — OCI Streaming compatible
+bootstrap.servers=$BOOTSTRAP_SERVERS
+key.converter=org.apache.kafka.connect.storage.StringConverter
+value.converter=org.apache.kafka.connect.storage.StringConverter
+offset.storage.file.filename=$CONNECT_OFFSET_FILE
+plugin.path=$KAFKA_CONNECT_PLUGIN_DIR
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$SASL_USERNAME" password="$STREAMING_AUTH_TOKEN";
+producer.security.protocol=SASL_SSL
+producer.sasl.mechanism=PLAIN
+producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$SASL_USERNAME" password="$STREAMING_AUTH_TOKEN";
+consumer.security.protocol=SASL_SSL
+consumer.sasl.mechanism=PLAIN
+consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$SASL_USERNAME" password="$STREAMING_AUTH_TOKEN";
+rest.port=8083
+access.control.allow.origin=*
+access.control.allow.methods=GET,OPTIONS,HEAD,POST,PUT,DELETE
+EOF_CONNECT
+
+cat >/etc/systemd/system/kafka-connect.service <<EOF_SERVICE
+[Unit]
+Description=Apache Kafka Connect (Standalone — OCI Streaming)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=KAFKA_HEAP_OPTS=-Xms512m -Xmx2g
+ExecStart=$KAFKA_HOME/bin/connect-standalone.sh $KAFKA_HOME/config/connect-standalone-oci.properties
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+
+systemctl daemon-reload
+systemctl enable kafka-connect
+systemctl restart kafka-connect

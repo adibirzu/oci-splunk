@@ -1,0 +1,22 @@
+bootstrap.servers=${kafka_bootstrap_servers}
+group.id=splunk-kafka-connect
+key.converter=org.apache.kafka.connect.storage.StringConverter
+value.converter=org.apache.kafka.connect.storage.StringConverter
+offset.storage.topic=${offset_storage_topic}
+config.storage.topic=${config_storage_topic}
+status.storage.topic=${status_storage_topic}
+offset.storage.replication.factor=1
+config.storage.replication.factor=1
+status.storage.replication.factor=1
+plugin.path=/opt/kafka/plugins
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${tenancy_name}/${user_name}/${stream_pool_id}" password="${auth_token}";
+consumer.security.protocol=SASL_SSL
+consumer.sasl.mechanism=PLAIN
+consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${tenancy_name}/${user_name}/${stream_pool_id}" password="${auth_token}";
+producer.security.protocol=SASL_SSL
+producer.sasl.mechanism=PLAIN
+producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="${tenancy_name}/${user_name}/${stream_pool_id}" password="${auth_token}";
+access.control.allow.origin=*
+access.control.allow.methods=GET,OPTIONS,HEAD,POST,PUT,DELETE

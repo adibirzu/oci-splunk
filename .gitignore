@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Local env and secrets
+.env.local
+.env
+*.pem
+*.key
+*.local
+*.secret
+
+# Terraform local state/artifacts
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+terraform/*.tfvars.bak*
+terraform/tfplan
+terraform/tfplan.*
+terraform/autodetected*.auto.tfvars
+terraform/generated/
+
+# Root local var files
+terraform.tfvars
+*.tfvars
+
+# Deployment outputs
+output/
+functions/
+*.log

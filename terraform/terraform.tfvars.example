@@ -1,0 +1,53 @@
+# Required for managed Splunk mode
+compartment_ocid       = "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+region                 = "us-ashburn-1"
+allowed_ingress_cidr   = "203.0.113.10/32"
+ssh_public_key         = "ssh-rsa AAAAB3Nza..."
+splunk_admin_password  = "ChangeMe123!"
+log_group_ocid         = "ocid1.loggroup.oc1..replace"
+log_ocid               = "ocid1.log.oc1..replace"
+splunk_hec_token       = "replace-with-hec-token"
+
+# Optional auth overrides for non-default profiles
+# auth             = "ApiKey"
+# oci_profile      = "DEFAULT"
+# oci_config_file  = "~/.oci/config"
+
+# Network mode: create end-to-end (default) or use existing
+use_existing_network = false
+# existing_vcn_id    = "ocid1.vcn.oc1..replace"
+# existing_subnet_id = "ocid1.subnet.oc1..replace"
+# existing_nsg_id    = "ocid1.networksecuritygroup.oc1..replace"
+
+# If true, Splunk VM is private and stack creates LB subnet + public LB automatically
+create_private_splunk_subnet = false
+enable_load_balancer_for_private = true
+
+# Reuse an existing LB (for private subnet use-cases)
+# existing_load_balancer_id = "ocid1.loadbalancer.oc1..replace"
+# existing_lb_subnet_id     = "ocid1.subnet.oc1..replace"
+
+# Streaming / Kafka Connect
+stream_pool_name = "oci-splunk-pool"
+stream_name      = "oci-splunk-stream"
+streaming_tenancy_name = "yourtenancyname"
+streaming_user_name    = "your.user"
+streaming_auth_token   = "replace-with-oci-auth-token"
+
+splunk_hec_url   = "https://splunk.example.com:8088/services/collector/event"
+splunk_hec_index = "main"
+
+generate_local_kafka_artifacts = true
+create_kafka_connect_internal_streams = false
+
+# Existing Splunk mode
+# use_existing_splunk    = true
+# existing_splunk_web_url = "https://your-splunk.example.com:8000"
+# splunk_hec_url          = "https://your-splunk.example.com:8088/services/collector/event"
+# splunk_hec_token        = "replace-with-existing-hec-token"
+
+# Optional Functions path
+enable_functions_path              = false
+create_logs_to_functions_connector = false
+# existing_function_id             = "ocid1.fnfunc.oc1..replace"
+# function_image                   = "<region-key>.ocir.io/<tenancy>/<repo>/<image>:tag"

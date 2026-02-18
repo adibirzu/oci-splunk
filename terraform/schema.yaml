@@ -1,0 +1,277 @@
+title: OCI Splunk End-to-End Stack
+description: Deploy Splunk VM, OCI Streaming, Service Connector, optional Functions path, and optional LB for private subnets.
+schemaVersion: 1.1.0
+version: 1.0.0
+locale: en
+
+variableGroups:
+  - title: Core
+    visible: true
+    variables:
+      - compartment_ocid
+      - region
+      - project_prefix
+  - title: Network
+    visible: true
+    variables:
+      - use_existing_network
+      - existing_vcn_id
+      - existing_subnet_id
+      - existing_nsg_id
+      - create_private_splunk_subnet
+      - enable_load_balancer_for_private
+      - enable_load_balancer_for_public
+      - existing_load_balancer_id
+      - existing_load_balancer_public_ip
+      - existing_lb_subnet_id
+      - allowed_ingress_cidr
+  - title: Splunk VM
+    visible: true
+    variables:
+      - use_existing_splunk
+      - existing_splunk_web_url
+      - ssh_public_key
+      - splunk_admin_password
+      - splunk_shape
+      - splunk_ocpus
+      - splunk_memory_gb
+      - splunk_boot_volume_gb
+  - title: Logging and Streaming
+    visible: true
+    variables:
+      - log_group_ocid
+      - log_ocid
+      - create_logs_to_stream_connector
+      - stream_pool_name
+      - stream_name
+      - existing_stream_pool_id
+      - existing_stream_id
+      - stream_partitions
+      - stream_retention_hours
+  - title: Kafka Connect and Splunk HEC
+    visible: true
+    variables:
+      - streaming_tenancy_name
+      - streaming_user_name
+      - streaming_auth_token
+      - splunk_hec_url
+      - splunk_hec_token
+      - splunk_hec_index
+      - create_kafka_connect_internal_streams
+      - generate_local_kafka_artifacts
+  - title: Optional Functions Path
+    visible: true
+    variables:
+      - enable_functions_path
+      - existing_function_app_id
+      - existing_function_id
+      - function_app_name
+      - function_name
+      - function_image
+      - create_logs_to_functions_connector
+
+variables:
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: Compartment
+    required: true
+  region:
+    type: string
+    title: Region
+    required: true
+  project_prefix:
+    type: string
+    title: Project Prefix
+    default: oci-splunk
+
+  use_existing_network:
+    type: boolean
+    title: Use Existing VCN/Subnet
+    default: false
+  existing_vcn_id:
+    type: oci:core:vcn:id
+    title: Existing VCN OCID
+    required: false
+  existing_subnet_id:
+    type: oci:core:subnet:id
+    title: Existing Splunk Subnet OCID
+    required: false
+  existing_nsg_id:
+    type: oci:core:networksecuritygroup:id
+    title: Existing NSG OCID
+    required: false
+  create_private_splunk_subnet:
+    type: boolean
+    title: Create Private Splunk Subnet
+    default: false
+  enable_load_balancer_for_private:
+    type: boolean
+    title: Enable LB for Private Subnet
+    default: true
+  enable_load_balancer_for_public:
+    type: boolean
+    title: Enable LB for Public Subnet
+    default: false
+  existing_load_balancer_id:
+    type: oci:loadbalancer:loadbalancer:id
+    title: Existing Load Balancer OCID
+    required: false
+  existing_load_balancer_public_ip:
+    type: string
+    title: Existing Load Balancer Public IP
+    required: false
+  existing_lb_subnet_id:
+    type: oci:core:subnet:id
+    title: Existing LB Subnet OCID
+    required: false
+  allowed_ingress_cidr:
+    type: string
+    title: Allowed Ingress CIDR
+    default: 203.0.113.10/32
+
+  ssh_public_key:
+    type: string
+    title: SSH Public Key
+    required: false
+  use_existing_splunk:
+    type: boolean
+    title: Use Existing Splunk Instance
+    default: false
+  existing_splunk_web_url:
+    type: string
+    title: Existing Splunk Web URL
+    required: false
+  splunk_admin_password:
+    type: password
+    title: Splunk Admin Password
+    required: false
+  splunk_shape:
+    type: string
+    title: Splunk Shape
+    default: VM.Standard.E4.Flex
+  splunk_ocpus:
+    type: number
+    title: Splunk OCPUs
+    default: 2
+  splunk_memory_gb:
+    type: number
+    title: Splunk Memory (GB)
+    default: 16
+  splunk_boot_volume_gb:
+    type: number
+    title: Splunk Boot Volume (GB)
+    default: 100
+
+  log_group_ocid:
+    type: oci:logging:loggroup:id
+    title: Log Group OCID
+    required: true
+  log_ocid:
+    type: oci:logging:log:id
+    title: Log OCID
+    required: true
+  create_logs_to_stream_connector:
+    type: boolean
+    title: Create Logs to Stream Connector
+    default: true
+  stream_pool_name:
+    type: string
+    title: Stream Pool Name
+    default: oci-splunk-pool
+  stream_name:
+    type: string
+    title: Stream Name
+    default: oci-splunk-stream
+  existing_stream_pool_id:
+    type: string
+    title: Existing Stream Pool OCID
+    required: false
+  existing_stream_id:
+    type: string
+    title: Existing Stream OCID
+    required: false
+  stream_partitions:
+    type: number
+    title: Stream Partitions
+    default: 1
+  stream_retention_hours:
+    type: number
+    title: Stream Retention Hours
+    default: 24
+
+  streaming_tenancy_name:
+    type: string
+    title: Kafka Tenancy Name
+    required: false
+  streaming_user_name:
+    type: string
+    title: Kafka User Name
+    required: false
+  streaming_auth_token:
+    type: password
+    title: Kafka Auth Token
+    required: false
+  splunk_hec_url:
+    type: string
+    title: Splunk HEC URL
+    description: Required when "Use Existing Splunk Instance" is enabled.
+    default: https://splunk.example.com:8088/services/collector/event
+  splunk_hec_token:
+    type: password
+    title: Splunk HEC Token
+    description: Required when "Use Existing Splunk Instance" is enabled.
+    required: true
+  splunk_hec_index:
+    type: string
+    title: Splunk HEC Index
+    default: main
+  create_kafka_connect_internal_streams:
+    type: boolean
+    title: Create Kafka Connect Internal Streams
+    description: Keep disabled for standalone Kafka Connect mode to use only one OCI stream.
+    default: false
+  generate_local_kafka_artifacts:
+    type: boolean
+    title: Generate Local Kafka Files
+    default: true
+
+  enable_functions_path:
+    type: boolean
+    title: Enable Functions Path
+    default: false
+  existing_function_app_id:
+    type: string
+    title: Existing Function App OCID
+    required: false
+  existing_function_id:
+    type: string
+    title: Existing Function OCID
+    required: false
+  function_app_name:
+    type: string
+    title: Function App Name
+    default: oci-splunk-fn-app
+  function_name:
+    type: string
+    title: Function Name
+    default: splunk-hec-forwarder
+  function_image:
+    type: string
+    title: Function Image (OCIR)
+    required: false
+  create_logs_to_functions_connector:
+    type: boolean
+    title: Create Logs to Functions Connector
+    default: false
+
+outputs:
+  splunk_web_url:
+    title: Splunk Web URL
+  splunk_hec_endpoint:
+    title: Splunk HEC Endpoint
+  stream_kafka_bootstrap_servers:
+    title: Kafka Bootstrap Servers
+  stream_id:
+    title: Stream OCID
+  logs_to_stream_connector_id:
+    title: Logs to Stream Connector OCID

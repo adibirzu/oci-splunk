@@ -155,7 +155,7 @@ variable "allowed_ingress_cidr" {
 variable "splunk_shape" {
   description = "Compute shape for Splunk VM."
   type        = string
-  default     = "VM.Standard.E4.Flex"
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "splunk_ocpus" {

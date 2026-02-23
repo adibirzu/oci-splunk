@@ -25,13 +25,11 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 
 ## Stack Deploy Button (GitHub)
 
-Replace `<owner>` and `<repo>`:
-
-[![Deploy to Oracle Cloud](https://img.shields.io/badge/Deploy%20to-Oracle%20Cloud-red)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fgithub.com%2F%3Cowner%3E%2F%3Crepo%3E%2Farchive%2Frefs%2Fheads%2Fmain.zip)
+[![Deploy to Oracle Cloud](https://img.shields.io/badge/Deploy%20to-Oracle%20Cloud-red)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fgithub.com%2Fadibirzu%2Foci-splunk%2Farchive%2Frefs%2Fheads%2Fmain.zip&workingDir=oci-splunk-main%2Fterraform)
 
 Stack working directory:
 
-- `oci-splunk/terraform`
+- `oci-splunk-main/terraform` (GitHub ZIP root folder is `<repo>-<branch>/`)
 
 Main stack fields to set:
 

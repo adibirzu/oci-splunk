@@ -21,37 +21,6 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 - Local Terraform recreate wrapper: `terraform/recreate_local.sh`
 - OCI CLI path: `deploy_oci_splunk.sh`
 - OCI CLI destroy path: `destroy_oci_splunk.sh`
-- OCI Resource Manager stack path (from GitHub ZIP)
-
-## Stack Deploy Button (GitHub)
-
-[![Deploy to Oracle Cloud](https://img.shields.io/badge/Deploy%20to-Oracle%20Cloud-red)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https%3A%2F%2Fgithub.com%2Fadibirzu%2Foci-splunk%2Farchive%2Frefs%2Fheads%2Fmain.zip&workingDir=oci-splunk-main%2Fterraform)
-
-Stack working directory:
-
-- `oci-splunk-main/terraform` (GitHub ZIP root folder is `<repo>-<branch>/`)
-
-Main stack fields to set:
-
-- `compartment_ocid`
-- `region`
-- `allowed_ingress_cidr`
-- `use_existing_splunk`
-- `existing_splunk_web_url` (optional, when reusing existing Splunk)
-- `ssh_public_key` (managed Splunk mode)
-- `splunk_admin_password` (managed Splunk mode)
-- `log_group_ocid`
-- `log_ocid`
-- `stream_name`
-- `existing_stream_id` / `existing_stream_pool_id` (reuse mode)
-- `create_logs_to_stream_connector` (keep enabled)
-- `create_kafka_connect_internal_streams` (keep disabled unless using distributed Kafka Connect worker topics)
-- `streaming_tenancy_name`
-- `streaming_user_name`
-- `streaming_auth_token`
-- `splunk_hec_url`
-- `splunk_hec_token`
-- `splunk_hec_index`
 
 ## Quick start (local Terraform)
 

@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="${SCRIPT_DIR}/output"
 STATE_FILE="${STATE_FILE:-${OUTPUT_DIR}/deployment-state.env}"
 DRY_RUN="false"
+OCI_PROFILE="${OCI_PROFILE:-${OCI_CLI_PROFILE:-DEFAULT}}"
+OCI_CONFIG_FILE="${OCI_CONFIG_FILE:-${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}}"
+FAILURES=0
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN="true"
@@ -35,6 +38,7 @@ run_or_echo() {
   else
     eval "${cmd}" || {
       echo "WARN: command failed (continuing): ${cmd}" >&2
+      FAILURES=$((FAILURES + 1))
       return 0
     }
   fi
@@ -60,6 +64,8 @@ delete_if_created() {
 }
 
 need_cmd oci
+export OCI_CLI_PROFILE="${OCI_PROFILE}"
+export OCI_CLI_CONFIG_FILE="${OCI_CONFIG_FILE}"
 
 if [[ ! -f "${STATE_FILE}" ]]; then
   echo "No state file found at ${STATE_FILE}. Nothing to destroy."
@@ -70,6 +76,7 @@ fi
 source "${STATE_FILE}"
 
 log "Using state file: ${STATE_FILE}"
+log "Using OCI profile: ${OCI_PROFILE}"
 
 # Reverse dependency order
 
@@ -122,6 +129,10 @@ delete_if_created "${CREATED_VCN:-false}" "${VCN_OCID:-}" \
   "oci network vcn delete --vcn-id '${VCN_OCID}' --force"
 
 if [[ "${DRY_RUN}" == "false" ]]; then
+  if [[ "${FAILURES}" -gt 0 ]]; then
+    log "Destroy completed with ${FAILURES} failed delete command(s). State file preserved: ${STATE_FILE}"
+    exit 1
+  fi
   rm -f "${STATE_FILE}"
   log "Destroy complete. Removed state file ${STATE_FILE}"
 else

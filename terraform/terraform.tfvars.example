@@ -1,5 +1,5 @@
 # Required for managed Splunk mode
-compartment_ocid       = "ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq"
+compartment_ocid       = "ocid1.compartment.oc1..replace-with-compartment-ocid"
 region                 = "us-ashburn-1"
 allowed_ingress_cidr   = "203.0.113.10/32"
 ssh_public_key         = "ssh-rsa AAAAB3Nza..."

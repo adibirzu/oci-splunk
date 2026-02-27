@@ -15,7 +15,7 @@ fi
 
 OCI_CONFIG_FILE="${OCI_CONFIG_FILE:-$HOME/.oci/config}"
 OCI_PROFILE="${OCI_PROFILE:-DEFAULT}"
-DEFAULT_COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID:-ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq}"
+DEFAULT_COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID:-}"
 SSH_KEY_SELECTION="${SSH_KEY_SELECTION:-}"
 SELECTED_SSH_PRIVATE_KEY_PATH="${SELECTED_SSH_PRIVATE_KEY_PATH:-}"
 
@@ -124,6 +124,18 @@ hec_health_url_from_url() {
   fi
 }
 
+is_true() {
+  local raw="${1:-false}"
+  raw="$(printf '%s' "${raw}" | tr '[:upper:]' '[:lower:]')"
+  [[ "${raw}" == "1" || "${raw}" == "true" || "${raw}" == "yes" || "${raw}" == "y" || "${raw}" == "on" ]]
+}
+
+is_placeholder_hec_url() {
+  local url="${1:-}"
+  [[ -z "${url}" ]] && return 0
+  [[ "${url}" == "https://splunk.example.com:8088/services/collector/event" || "${url}" == "http://127.0.0.1:8088/services/collector/event" ]]
+}
+
 autodetect_oci_profile() {
   if [[ -f "${OCI_CONFIG_FILE}" ]]; then
     export OCI_CLI_PROFILE="${OCI_PROFILE}"
@@ -136,8 +148,13 @@ autodetect_oci_profile() {
     OCI_KEY_FILE="${OCI_KEY_FILE:-$(oci_cfg_value key_file || true)}"
 
     if [[ -z "${COMPARTMENT_OCID:-}" ]]; then
-      COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID}"
-      printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "COMPARTMENT_OCID not set; defaulting to ${COMPARTMENT_OCID} (Adrian_Birzu)"
+      if [[ -n "${DEFAULT_COMPARTMENT_OCID}" ]]; then
+        COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID}"
+        printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "COMPARTMENT_OCID not set; defaulting to DEFAULT_COMPARTMENT_OCID=${COMPARTMENT_OCID}"
+      elif [[ -n "${TENANCY_OCID:-}" ]]; then
+        COMPARTMENT_OCID="${TENANCY_OCID}"
+        printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "COMPARTMENT_OCID not set; defaulting to tenancy root compartment ${COMPARTMENT_OCID}"
+      fi
     fi
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "Detected OCI CLI profile ${OCI_PROFILE} in ${OCI_CONFIG_FILE}"
   fi
@@ -157,6 +174,7 @@ DEPLOY_FUNCTION_CODE="${DEPLOY_FUNCTION_CODE:-false}"
 CREATE_AUTH_TOKEN="${CREATE_AUTH_TOKEN:-false}"
 REUSE_EXISTING_STREAMING="${REUSE_EXISTING_STREAMING:-true}"
 USE_EXISTING_SPLUNK="${USE_EXISTING_SPLUNK:-false}"
+SKIP_POST_DEPLOY_VERIFY="${SKIP_POST_DEPLOY_VERIFY:-false}"
 
 REGION="${REGION:-}"
 COMPARTMENT_OCID="${COMPARTMENT_OCID:-}"
@@ -995,19 +1013,26 @@ verify_deployment() {
     [[ "${stream_state}" == "ACTIVE" ]] || fail "Stream is not ACTIVE (${stream_state})"
   fi
 
-  if [[ -n "${SPLUNK_HEC_URL}" ]]; then
+  local hec_url_for_verify="${SPLUNK_HEC_URL:-}"
+  if [[ "${CREATE_SPLUNK_INSTANCE}" == "true" && "${USE_EXISTING_SPLUNK}" != "true" && -n "${SPLUNK_INSTANCE_PUBLIC_IP:-}" ]] && is_placeholder_hec_url "${hec_url_for_verify}"; then
+    hec_url_for_verify="http://${SPLUNK_INSTANCE_PUBLIC_IP}:8088/services/collector/event"
+  fi
+
+  if [[ -n "${hec_url_for_verify}" ]] && ! is_placeholder_hec_url "${hec_url_for_verify}"; then
     local hec_health_url hec_resp hec_code
-    hec_health_url="$(hec_health_url_from_url "${SPLUNK_HEC_URL}")"
+    hec_health_url="$(hec_health_url_from_url "${hec_url_for_verify}")"
     if ! curl -fsS -m 8 "${hec_health_url}" >/dev/null; then
       fail "Splunk HEC health endpoint is not reachable: ${hec_health_url}"
     fi
     if [[ -n "${SPLUNK_HEC_TOKEN}" && "${SPLUNK_HEC_TOKEN}" != "replace-with-hec-token" && "${SPLUNK_HEC_TOKEN}" != "TEMP_HEC_TOKEN_TO_REPLACE" ]]; then
       hec_resp="$(curl -sS -m 10 -H "Authorization: Splunk ${SPLUNK_HEC_TOKEN}" -H "Content-Type: application/json" \
         -d "{\"event\":\"oci-splunk-post-deploy-test\",\"source\":\"deploy_oci_splunk.sh\"}" \
-        "${SPLUNK_HEC_URL}")"
+        "${hec_url_for_verify}")"
       hec_code="$(jq -r '.code // ""' <<<"${hec_resp}")"
       [[ "${hec_code}" == "0" ]] || fail "HEC ingest test failed. Response: ${hec_resp}"
     fi
+  else
+    log "Skipping HEC endpoint verification (no explicit non-placeholder HEC URL for this deploy mode)."
   fi
 
   if [[ "${MODE}" == "kafka" || "${MODE}" == "both" ]]; then
@@ -1069,7 +1094,11 @@ main() {
     fi
   fi
 
-  verify_deployment
+  if is_true "${SKIP_POST_DEPLOY_VERIFY}"; then
+    log "Skipping post-deploy verification (SKIP_POST_DEPLOY_VERIFY=true)"
+  else
+    verify_deployment
+  fi
   print_summary
 }
 

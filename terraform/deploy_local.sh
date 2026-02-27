@@ -11,7 +11,7 @@ TFVARS_FILE="${TFVARS_FILE:-}"
 AUTO_VARS_FILE="${SCRIPT_DIR}/autodetected.auto.tfvars"
 STREAM_REUSE_VARS_FILE="${SCRIPT_DIR}/autodetected_stream_reuse.auto.tfvars"
 REUSE_EXISTING_STREAMING="${REUSE_EXISTING_STREAMING:-true}"
-DEFAULT_COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID:-ocid1.compartment.oc1..aaaaaaaagy3yddkkampnhj3cqm5ar7w2p7tuq5twbojyycvol6wugfav3ckq}"
+DEFAULT_COMPARTMENT_OCID="${DEFAULT_COMPARTMENT_OCID:-}"
 SSH_KEY_SELECTION="${SSH_KEY_SELECTION:-}"
 SPLUNK_SSH_PUBLIC_KEY_PATH="${SPLUNK_SSH_PUBLIC_KEY_PATH:-}"
 SELECTED_SSH_PRIVATE_KEY_PATH="${SELECTED_SSH_PRIVATE_KEY_PATH:-}"
@@ -490,8 +490,17 @@ if [[ -n "${TF_VAR_compartment_ocid:-}" ]]; then
   echo "compartment_ocid = \"${TF_VAR_compartment_ocid}\"" >> "${AUTO_VARS_FILE}"
 fi
 
-if [[ -z "${TF_VAR_compartment_ocid:-}" && ! -f "${SCRIPT_DIR}/terraform.tfvars" ]]; then
-  echo "compartment_ocid = \"${DEFAULT_COMPARTMENT_OCID}\"" >> "${AUTO_VARS_FILE}"
+if [[ -z "${TF_VAR_compartment_ocid:-}" ]]; then
+  TFVARS_COMPARTMENT_OCID="$(tfvars_val compartment_ocid "${TFVARS_FILE}" || true)"
+  if [[ -n "${TFVARS_COMPARTMENT_OCID}" ]]; then
+    :
+  elif [[ -n "${DEFAULT_COMPARTMENT_OCID}" ]]; then
+    echo "compartment_ocid = \"${DEFAULT_COMPARTMENT_OCID}\"" >> "${AUTO_VARS_FILE}"
+    echo "Using DEFAULT_COMPARTMENT_OCID for compartment_ocid: ${DEFAULT_COMPARTMENT_OCID}"
+  elif [[ -n "${TENANCY_OCID}" ]]; then
+    echo "compartment_ocid = \"${TENANCY_OCID}\"" >> "${AUTO_VARS_FILE}"
+    echo "No compartment_ocid provided; defaulting to tenancy root compartment: ${TENANCY_OCID}"
+  fi
 fi
 
 if [[ -n "${TF_VAR_allowed_ingress_cidr:-}" ]]; then

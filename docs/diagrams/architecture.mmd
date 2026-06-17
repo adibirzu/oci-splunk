@@ -1,0 +1,24 @@
+flowchart LR
+  subgraph SRC["OCI log sources"]
+    AUDIT["Audit logs"]
+    FLOW["VCN flow logs"]
+    SVC["Service / custom logs"]
+  end
+  SCH["Service Connector Hub"]
+  STREAM["OCI Streaming<br/>(Kafka-compatible stream)"]
+
+  subgraph VM["Splunk compute VM — public subnet, NSG-restricted"]
+    direction TB
+    CONS["Stream consumer<br/>soc4kafka (OTel Collector)<br/>or Kafka Connect"]
+    HEC["Splunk HEC :8088"]
+    IDX["index=main<br/>sourcetype=oci:log"]
+    WEB["Splunk Web :8000"]
+  end
+
+  AUDIT --> SCH
+  FLOW --> SCH
+  SVC --> SCH
+  SCH -->|writes| STREAM
+  STREAM -->|"Kafka consumer group<br/>SASL_SSL / PLAIN"| CONS
+  CONS -->|"HTTP POST /services/collector"| HEC
+  HEC --> IDX --> WEB

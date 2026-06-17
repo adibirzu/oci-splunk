@@ -1,0 +1,8 @@
+flowchart TD
+  DEV["deploy_local.sh (Terraform)"] --> PRE["IAM preflight + SSH key + ingress /32"]
+  PRE --> NET["VCN / subnet / NSG"]
+  PRE --> STR["Stream pool + stream"]
+  PRE --> VM["Compute instance"]
+  STR --> CINIT
+  VM --> CINIT["cloud-init:<br/>install Splunk -> write HEC inputs.conf -><br/>install + start soc4kafka.service"]
+  CINIT --> VER["verify_deployment.sh<br/>(HEC health + ingest test)"]

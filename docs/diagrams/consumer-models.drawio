@@ -1,0 +1,28 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="models" name="Consumer models">
+    <mxGraphModel dx="700" dy="500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="700" pageHeight="520" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="stream" value="OCI Streaming" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="270" y="40" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="soc" value="soc4kafka&#10;Splunk OTel Collector&#10;(protocol_version 1.0.0)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="120" y="190" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="kc" value="legacy_kafka_connect&#10;Kafka Connect + Splunk sink" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="370" y="190" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="hec" value="Splunk HEC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="270" y="350" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m1" value="default / opt-in" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="stream" target="soc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="m2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="stream" target="kc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="m3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="soc" target="hec"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="m4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="kc" target="hec"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

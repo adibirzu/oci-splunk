@@ -1,0 +1,40 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="deploy" name="Deployment flow">
+    <mxGraphModel dx="700" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="600" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="dev" value="deploy_local.sh (Terraform)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="40" width="240" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="pre" value="IAM preflight + SSH key + ingress /32" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="190" y="130" width="260" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="net" value="VCN / subnet / NSG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="str" value="Stream pool + stream" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="230" y="230" width="170" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="vm" value="Compute instance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="420" y="230" width="150" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cinit" value="cloud-init:&#10;install Splunk -&gt; write HEC inputs.conf -&gt;&#10;install + start soc4kafka.service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="200" y="340" width="320" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ver" value="verify_deployment.sh&#10;(HEC health + ingest test)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6" vertex="1" parent="1">
+          <mxGeometry x="230" y="460" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="dev" target="pre"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="pre" target="net"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="pre" target="str"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="pre" target="vm"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d5" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="vm" target="cinit"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d6" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;dashed=1" edge="1" parent="1" source="str" target="cinit"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="d7" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="cinit" target="ver"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

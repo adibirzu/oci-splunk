@@ -1,0 +1,55 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="arch" name="Architecture">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="srcbox" value="OCI log sources" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="200" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="audit" value="Audit logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="flow" value="VCN flow logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="60" y="160" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="svc" value="Service / custom logs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="60" y="220" width="160" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sch" value="Service Connector Hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="300" y="150" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="stream" value="OCI Streaming&#10;(Kafka-compatible stream)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="530" y="140" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vmbox" value="Splunk compute VM — public subnet, NSG-restricted" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="750" y="40" width="310" height="360" as="geometry" />
+        </mxCell>
+        <mxCell id="cons" value="Stream consumer&#10;soc4kafka (OTel Collector)&#10;or Kafka Connect" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="780" y="80" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="hec" value="Splunk HEC :8088" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="780" y="170" width="250" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="idx" value="index=main&#10;sourcetype=oci:log" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6" vertex="1" parent="1">
+          <mxGeometry x="800" y="240" width="210" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="web" value="Splunk Web :8000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="780" y="330" width="250" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="audit" target="sch"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="flow" target="sch"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="svc" target="sch"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="writes" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="sch" target="stream"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="Kafka consumer group&#10;SASL_SSL / PLAIN" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="stream" target="cons"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" value="HTTP POST&#10;/services/collector" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="cons" target="hec"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="hec" target="idx"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block" edge="1" parent="1" source="idx" target="web"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

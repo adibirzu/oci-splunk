@@ -30,32 +30,7 @@ OCI platform logs are fanned through **OCI Streaming** (a Kafka-compatible
 service) and landed in **Splunk over HEC**. A single consumer runtime on the
 Splunk side pulls from the stream and forwards events to HEC.
 
-```mermaid
-flowchart LR
-  subgraph SRC["OCI log sources"]
-    AUDIT["Audit logs"]
-    FLOW["VCN flow logs"]
-    SVC["Service / custom logs"]
-  end
-  SCH["Service Connector Hub"]
-  STREAM["OCI Streaming<br/>(Kafka-compatible stream)"]
-
-  subgraph VM["Splunk compute VM — public subnet, NSG-restricted"]
-    direction TB
-    CONS["Stream consumer<br/>soc4kafka (OTel Collector)<br/>or Kafka Connect"]
-    HEC["Splunk HEC :8088"]
-    IDX["index=main<br/>sourcetype=oci:log"]
-    WEB["Splunk Web :8000"]
-  end
-
-  AUDIT --> SCH
-  FLOW --> SCH
-  SVC --> SCH
-  SCH -->|writes| STREAM
-  STREAM -->|"Kafka consumer group<br/>SASL_SSL / PLAIN"| CONS
-  CONS -->|"HTTP POST /services/collector"| HEC
-  HEC --> IDX --> WEB
-```
+![End-to-end architecture: OCI log sources to Splunk via OCI Streaming and a SOC4Kafka consumer](docs/diagrams/architecture.png)
 
 ### Components
 
@@ -70,14 +45,7 @@ flowchart LR
 
 ### Consumer models
 
-```mermaid
-flowchart TB
-  STREAM["OCI Streaming"]
-  STREAM --> SOC["soc4kafka<br/>Splunk OTel Collector<br/>(protocol_version 1.0.0)"]
-  STREAM --> KC["legacy_kafka_connect<br/>Kafka Connect + Splunk sink"]
-  SOC --> HEC["Splunk HEC"]
-  KC --> HEC
-```
+![Two consumer models: soc4kafka (OTel Collector) and legacy Kafka Connect, both feeding Splunk HEC](docs/diagrams/consumer-models.png)
 
 Choose one with `stream_consumer_model` (Terraform) or `STREAM_CONSUMER_MODEL`
 (CLI). `soc4kafka` is the lighter, validated path — see
@@ -86,16 +54,10 @@ OCI-Streaming-specific settings it requires.
 
 ### Deployment flow
 
-```mermaid
-flowchart TD
-  DEV["deploy_local.sh (Terraform)"] --> PRE["IAM preflight + SSH key + ingress /32"]
-  PRE --> NET["VCN / subnet / NSG"]
-  PRE --> STR["Stream pool + stream"]
-  PRE --> VM["Compute instance"]
-  STR --> CINIT
-  VM --> CINIT["cloud-init:<br/>install Splunk → write HEC inputs.conf →<br/>install + start soc4kafka.service"]
-  CINIT --> VER["verify_deployment.sh<br/>(HEC health + ingest test)"]
-```
+![Deployment flow: Terraform preflight, network/stream/VM creation, cloud-init bootstrap, and verification](docs/diagrams/deployment-flow.png)
+
+> Diagram sources are in [`docs/diagrams/`](docs/diagrams/) — editable as draw.io
+> (`*.drawio`) or Mermaid (`*.mmd`), with rendered `*.png` pictures.
 
 ## Deploy paths
 

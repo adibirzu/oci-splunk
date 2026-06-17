@@ -1,0 +1,6 @@
+flowchart TB
+  STREAM["OCI Streaming"]
+  STREAM --> SOC["soc4kafka<br/>Splunk OTel Collector<br/>(protocol_version 1.0.0)"]
+  STREAM --> KC["legacy_kafka_connect<br/>Kafka Connect + Splunk sink"]
+  SOC --> HEC["Splunk HEC"]
+  KC --> HEC

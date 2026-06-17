@@ -8,7 +8,12 @@ locals {
   effective_subnet_id        = local.create_network ? oci_core_subnet.splunk[0].id : var.existing_subnet_id
   effective_stream_pool_id   = local.create_stream_pool ? oci_streaming_stream_pool.splunk[0].id : var.existing_stream_pool_id
   effective_stream_id        = local.create_stream ? oci_streaming_stream.splunk[0].id : var.existing_stream_id
-  generated_bootstrap        = "streaming.${var.region}.oci.oraclecloud.com:9092"
+  # The stream pool's own endpoint FQDN (cell-N.streaming.<region>...) hosts the
+  # group coordinator. The generic regional endpoint answers metadata but not
+  # consumer-group coordination, so a SOC4Kafka consumer hangs on it. Prefer the
+  # pool FQDN; fall back to the regional endpoint only if it can't be resolved.
+  pool_endpoint_fqdn         = try(data.oci_streaming_stream_pool.effective[0].endpoint_fqdn, "")
+  generated_bootstrap        = local.pool_endpoint_fqdn != "" ? "${local.pool_endpoint_fqdn}:9092" : "streaming.${var.region}.oci.oraclecloud.com:9092"
   kafka_bootstrap_servers    = var.kafka_bootstrap_servers != "" ? var.kafka_bootstrap_servers : local.generated_bootstrap
   create_new_lb              = local.create_managed_splunk && local.lb_enabled && !local.use_existing_lb
   effective_lb_subnet_id     = local.create_network ? try(oci_core_subnet.lb[0].id, "") : var.existing_lb_subnet_id
@@ -433,6 +438,14 @@ resource "oci_streaming_stream_pool" "splunk" {
   count          = local.create_stream_pool ? 1 : 0
   compartment_id = var.compartment_ocid
   name           = var.stream_pool_name
+}
+
+# Resolve the effective stream pool's Kafka endpoint FQDN (works for both a
+# freshly created pool and a reused existing one). Used to build the Kafka
+# bootstrap server so the consumer reaches the pool's group coordinator.
+data "oci_streaming_stream_pool" "effective" {
+  count          = local.effective_stream_pool_id != "" ? 1 : 0
+  stream_pool_id = local.effective_stream_pool_id
 }
 
 resource "oci_streaming_stream" "splunk" {

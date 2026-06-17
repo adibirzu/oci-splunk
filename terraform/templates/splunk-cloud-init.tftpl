@@ -131,28 +131,15 @@ run_as_splunk /opt/splunk/bin/splunk start --accept-license --answer-yes --no-pr
 /opt/splunk/bin/splunk enable boot-start -user splunk --accept-license --answer-yes
 
 mkdir -p /opt/splunk/etc/apps/splunk_httpinput/local
-run_as_splunk /opt/splunk/bin/splunk http-event-collector enable \
-  -uri https://127.0.0.1:8089 \
-  -port 8088 \
-  -enable-ssl 0 \
-  -auth "admin:$SPLUNK_ADMIN_PASSWORD" >/tmp/hec-enable.log 2>&1 || true
 
-if [[ "$SPLUNK_HEC_TOKEN" == "replace-with-hec-token" || "$SPLUNK_HEC_TOKEN" == "TEMP_HEC_TOKEN_TO_REPLACE" ]]; then
-  SPLUNK_HEC_TOKEN=""
-fi
-
-if [[ -z "$SPLUNK_HEC_TOKEN" ]]; then
-  run_as_splunk /opt/splunk/bin/splunk http-event-collector create oci-kafka-hec \
-    -uri https://127.0.0.1:8089 \
-    -description "OCI Kafka HEC token" \
-    -index "$SPLUNK_HEC_INDEX" \
-    -sourcetype "oci:log" \
-    -auth "admin:$SPLUNK_ADMIN_PASSWORD" \
-    -disabled 0 >/tmp/hec-create.log 2>&1 || true
-  SPLUNK_HEC_TOKEN="$(sed -n '/^\[http:\/\/oci-kafka-hec\]/,/^\[/ s/^token = //p' /opt/splunk/etc/apps/splunk_httpinput/local/inputs.conf | head -n1 | tr -d '[:space:]')"
-fi
-
-if [[ -z "$SPLUNK_HEC_TOKEN" ]]; then
+# Resolve the HEC token without the first-boot `http-event-collector` CLI. On
+# Splunk 10.x that CLI intermittently fails to persist ("Data could not be
+# written: /nobody/...") and leaves local/inputs.conf unwritten; the previous
+# code then ran `sed` over that missing file, which under `set -euo pipefail`
+# aborted cloud-init before the SOC4Kafka steps. Instead we generate a token
+# (when one wasn't supplied) and write the HEC stanza directly below — Splunk
+# enables HEC from inputs.conf on the restart that follows.
+if [[ "$SPLUNK_HEC_TOKEN" == "replace-with-hec-token" || "$SPLUNK_HEC_TOKEN" == "TEMP_HEC_TOKEN_TO_REPLACE" || -z "$SPLUNK_HEC_TOKEN" ]]; then
   SPLUNK_HEC_TOKEN="$(cat /proc/sys/kernel/random/uuid)"
 fi
 

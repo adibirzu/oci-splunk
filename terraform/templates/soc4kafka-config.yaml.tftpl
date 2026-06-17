@@ -4,6 +4,11 @@ receivers:
       - ${kafka_bootstrap_servers_json}
     group_id: ${soc4kafka_group_id_json}
     client_id: ${soc4kafka_client_id_json}
+    # OCI Streaming speaks the Kafka 1.0 protocol (Metadata v5 / Fetch v6 max).
+    # Without pinning this, franz-go (the kafkareceiver client) negotiates v7+
+    # and loops on "max version 5 below the user defined min of 7", never
+    # joining the consumer group.
+    protocol_version: "1.0.0"
     logs:
       topics:
         - ${stream_name_json}
@@ -42,6 +47,9 @@ exporters:
       sizer: items
       batch:
         min_size: 1000
+        # Flush partial batches so low/idle volume still reaches HEC instead of
+        # waiting indefinitely for min_size items.
+        flush_timeout: 5s
     splunk_app_name: soc4kafka
 
 service:

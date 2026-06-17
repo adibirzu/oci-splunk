@@ -1,3 +1,8 @@
+---
+config:
+  look: handDrawn
+  theme: default
+---
 flowchart TD
   DEV["deploy_local.sh (Terraform)"] --> PRE["IAM preflight + SSH key + ingress /32"]
   PRE --> NET["VCN / subnet / NSG"]

@@ -444,7 +444,9 @@ resource "oci_streaming_stream_pool" "splunk" {
 # freshly created pool and a reused existing one). Used to build the Kafka
 # bootstrap server so the consumer reaches the pool's group coordinator.
 data "oci_streaming_stream_pool" "effective" {
-  count          = local.effective_stream_pool_id != "" ? 1 : 0
+  # count must be known at plan time, so gate on the config flags rather than
+  # effective_stream_pool_id (which is known-only-after-apply for a new pool).
+  count          = (local.create_stream_pool || var.existing_stream_pool_id != "") ? 1 : 0
   stream_pool_id = local.effective_stream_pool_id
 }
 

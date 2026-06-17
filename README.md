@@ -5,6 +5,14 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 - Managed Splunk on OCI compute (created by this project)
 - Existing Splunk instance (you provide HEC endpoint/token)
 
+> [!IMPORTANT]
+> **Independent project — not affiliated with, endorsed by, or supported by Oracle.**
+> It is provided **as-is, with no warranty and no official support**. You are
+> responsible for reviewing, testing, securing, and **maintaining the code** in your
+> own tenancy, and for any OCI costs it incurs. If you find a bug or have a fix,
+> please [open an issue](../../issues) or a pull request — community reports are how
+> this stays healthy.
+
 ## What gets deployed
 
 - OCI Logging -> Service Connector -> OCI Streaming stream (Kafka compatibility)
@@ -15,6 +23,79 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 - Consumer defaults tuned for stability (`splunk.hec.ack.enabled=false` for legacy, bounded queues for SOC4Kafka)
 - Post-deploy verification (connectivity + HEC ingest test)
 - Optimized stream usage: single OCI stream by default (`create_kafka_connect_internal_streams=false`)
+
+## Architecture
+
+OCI platform logs are fanned through **OCI Streaming** (a Kafka-compatible
+service) and landed in **Splunk over HEC**. A single consumer runtime on the
+Splunk side pulls from the stream and forwards events to HEC.
+
+```mermaid
+flowchart LR
+  subgraph SRC["OCI log sources"]
+    AUDIT["Audit logs"]
+    FLOW["VCN flow logs"]
+    SVC["Service / custom logs"]
+  end
+  SCH["Service Connector Hub"]
+  STREAM["OCI Streaming<br/>(Kafka-compatible stream)"]
+
+  subgraph VM["Splunk compute VM — public subnet, NSG-restricted"]
+    direction TB
+    CONS["Stream consumer<br/>soc4kafka (OTel Collector)<br/>or Kafka Connect"]
+    HEC["Splunk HEC :8088"]
+    IDX["index=main<br/>sourcetype=oci:log"]
+    WEB["Splunk Web :8000"]
+  end
+
+  AUDIT --> SCH
+  FLOW --> SCH
+  SVC --> SCH
+  SCH -->|writes| STREAM
+  STREAM -->|"Kafka consumer group<br/>SASL_SSL / PLAIN"| CONS
+  CONS -->|"HTTP POST /services/collector"| HEC
+  HEC --> IDX --> WEB
+```
+
+### Components
+
+| Component | Role |
+|-----------|------|
+| **Service Connector Hub** | Moves selected OCI logs into the stream. Optional — you can produce to the stream yourself. |
+| **OCI Streaming** | Kafka-**1.0**-compatible buffer between OCI and Splunk. SASL_SSL PLAIN auth with an OCI auth token. |
+| **Stream consumer** | `soc4kafka` (Splunk OTel Collector, validated) or `legacy_kafka_connect` (Kafka Connect + Splunk sink). Runs as a `systemd` service on the Splunk VM. |
+| **Splunk HEC** | Ingest endpoint on `:8088`; token + index/sourcetype configured at bootstrap. |
+| **Managed Splunk VM** | OL8 compute instance; cloud-init installs Splunk, configures HEC, and starts the consumer. Optional — skip with existing-Splunk mode. |
+| **Network** | VCN/subnet/NSG with ingress locked to your `/32` (SSH/Web/HEC) and egress open so the consumer can reach OCI Streaming. |
+
+### Consumer models
+
+```mermaid
+flowchart TB
+  STREAM["OCI Streaming"]
+  STREAM --> SOC["soc4kafka<br/>Splunk OTel Collector<br/>(protocol_version 1.0.0)"]
+  STREAM --> KC["legacy_kafka_connect<br/>Kafka Connect + Splunk sink"]
+  SOC --> HEC["Splunk HEC"]
+  KC --> HEC
+```
+
+Choose one with `stream_consumer_model` (Terraform) or `STREAM_CONSUMER_MODEL`
+(CLI). `soc4kafka` is the lighter, validated path — see
+[SOC4Kafka on OCI Streaming](#soc4kafka-on-oci-streaming) for the
+OCI-Streaming-specific settings it requires.
+
+### Deployment flow
+
+```mermaid
+flowchart TD
+  DEV["deploy_local.sh (Terraform)"] --> PRE["IAM preflight + SSH key + ingress /32"]
+  PRE --> NET["VCN / subnet / NSG"]
+  PRE --> STR["Stream pool + stream"]
+  PRE --> VM["Compute instance"]
+  STR --> CINIT
+  VM --> CINIT["cloud-init:<br/>install Splunk → write HEC inputs.conf →<br/>install + start soc4kafka.service"]
+  CINIT --> VER["verify_deployment.sh<br/>(HEC health + ingest test)"]
+```
 
 ## Deploy paths
 
@@ -45,6 +126,63 @@ cp terraform.tfvars.example terraform.tfvars
 - auto-generates Splunk HEC token after managed Splunk provisioning (when placeholder is used)
 - prints connection credentials at the end
 - runs `verify_deployment.sh` automatically after apply
+
+## Bring your own infrastructure
+
+If you already run your own OCI network, Splunk, and/or stream, reuse them
+instead of letting this project create everything. Each layer switches
+independently.
+
+### Reuse an existing VCN / subnet / NSG
+
+```hcl
+use_existing_network = true
+existing_vcn_id      = "ocid1.vcn.oc1...."
+existing_subnet_id   = "ocid1.subnet.oc1...."
+existing_nsg_id      = "ocid1.networksecuritygroup.oc1...."   # optional
+```
+
+The subnet needs egress to OCI Streaming (NAT or service gateway). For the
+managed VM, it also needs ingress to `:22`, `:8000`, and `:8088` from your address.
+
+### Use your existing Splunk (no managed VM created)
+
+```hcl
+use_existing_splunk = true
+splunk_hec_url      = "https://your-splunk:8088/services/collector/event"
+splunk_hec_token    = "<your-hec-token>"
+```
+
+No compute instance is created. You run the consumer (SOC4Kafka collector or
+Kafka Connect) wherever you like and point its `splunk_hec` exporter at the HEC
+URL/token above and its kafka receiver at the stream. The project still renders
+a ready-to-use `soc4kafka` config you can drop onto your host. CLI equivalent:
+`USE_EXISTING_SPLUNK=true` + `SPLUNK_HEC_URL` + `SPLUNK_HEC_TOKEN`.
+
+### Reuse an existing stream / stream pool
+
+```hcl
+existing_stream_pool_id = "ocid1.streampool.oc1...."
+existing_stream_id      = "ocid1.stream.oc1...."
+```
+
+### Streaming (SASL) inputs you must provide
+
+| Variable | Value |
+|----------|-------|
+| `streaming_tenancy_name` | Your tenancy name (e.g. `acme`). |
+| `streaming_user_name` | IAM user whose auth token authenticates to Streaming. For identity-domain / federated users this is the full principal, e.g. `oracleidentitycloudservice/jane@example.com`. |
+| `streaming_auth_token` | An OCI **auth token** for that user — this is the SASL password. |
+| `kafka_bootstrap_servers` | Leave empty to auto-derive the pool's `cell-N` endpoint, or set it explicitly. |
+
+The SASL username is assembled as
+`<streaming_tenancy_name>/<streaming_user_name>/<stream_pool_OCID>` (override the
+whole thing with `streaming_sasl_username`). The user (or its group) needs
+`use stream-pull` on the stream's compartment or tenancy.
+
+> **Bring-everything example:** set `use_existing_network`, `use_existing_splunk`,
+> and `existing_stream_*` together — the project then only wires the consumer
+> config and runs verification, creating little to no new OCI infrastructure.
 
 ## Existing Splunk mode
 

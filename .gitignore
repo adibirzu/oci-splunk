@@ -28,3 +28,7 @@ terraform.tfvars
 output/
 functions/
 *.log
+
+# Local-only blog drafts (never published)
+drafts/
+*.draft.md

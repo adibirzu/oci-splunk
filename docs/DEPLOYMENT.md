@@ -52,8 +52,10 @@ Existing Splunk mode:
 
 Managed Splunk mode:
 - if `SPLUNK_HEC_TOKEN` is placeholder (`TEMP_HEC_TOKEN_TO_REPLACE`), token is generated post-provisioning from Splunk CLI and stored in `output/generated-hec-token.env`
-- `AUTO_CONFIGURE_KAFKA_CONNECT_ON_VM=true` (default) installs Kafka Connect standalone on the VM and auto-wires the Splunk sink connector to the OCI stream
-- Kafka connector defaults are compatibility/stability oriented: `splunk.hec.ack.enabled=false`, `splunk.hec.max.outstanding.events=10000`, and `KAFKA_HEAP_OPTS=-Xms512m -Xmx2g`
+- `STREAM_CONSUMER_MODEL=legacy_kafka_connect` (default) installs Kafka Connect standalone and auto-wires the Splunk sink connector to the OCI stream
+- `STREAM_CONSUMER_MODEL=soc4kafka` installs `soc4kafka.service` with Splunk OTel Collector and writes `output/soc4kafka-config.yaml`
+- Kafka Connect gets a base HEC URI; SOC4Kafka gets `/services/collector`
+- SOC4Kafka is compatibility-gated for OCI Streaming and should be promoted only after end-to-end ingestion succeeds in your tenancy
 
 Destroy only resources created by deploy script:
 
@@ -68,7 +70,7 @@ The destroy script reads `output/deployment-state.env` and uses `CREATED_*` flag
 
 1. Create stack from GitHub ZIP
 2. Set working directory: `oci-splunk/terraform`
-3. Fill variables in stack form (`schema.yaml`)
+3. Fill variables in the stack form generated from `terraform/schema.yaml`
 4. Run Plan and Apply
 
 Sample API body:
@@ -87,14 +89,54 @@ Validation checks:
 - Splunk web reachability
 - Splunk HEC health endpoint
 - Splunk HEC ingest test event
-- Kafka Connect service active on managed Splunk VM (kafka/both modes)
+- Selected stream consumer service active on managed Splunk VM when `SPLUNK_SSH_PRIVATE_KEY_PATH` is set
+
+### Deployment Evidence Screenshots
+
+The repo includes screenshots captured from a live managed Splunk deployment:
+
+| Evidence | Screenshot |
+|---|---|
+| Splunk Web is reachable on port 8000 | ![Splunk Web login](screenshots/splunk-web-login.png) |
+| Splunk HEC health endpoint is reachable | ![Splunk HEC health](screenshots/splunk-hec-health.png) |
+
+For OCI Console walkthrough screenshots, capture these pages after logging in to
+the target tenancy and place the images under `docs/screenshots/`:
+
+1. **Logging**: the selected log enabled for the pipeline.
+2. **Service Connector Hub**: the Logging -> Streaming connector in `ACTIVE` state.
+3. **Streaming**: the stream and stream pool used by Kafka compatibility.
+4. **Compute**: the managed Splunk instance in `RUNNING` state.
+5. **Network Security Group**: ingress rules for SSH, Splunk Web, and HEC scoped to the operator CIDR.
+
+Do not commit raw OCIDs, public IPs, usernames, or tenancy-specific values in
+screenshots. Crop or mask identifiers before adding OCI Console images.
 
 ## Stream optimization
 
 - `create_kafka_connect_internal_streams=false` is now the default.
 - Only one OCI stream is required for this project (`stream_name`, e.g. `Logs2Splunk`).
 - Ensure `create_logs_to_stream_connector=true` so OCI Logging events are forwarded to that stream.
-- This aligns with OCI-DEMO C3: OCI Logging -> Service Connector Hub -> OCI Streaming -> Kafka Connect -> Splunk HEC.
+- This aligns with OCI-DEMO C3: OCI Logging -> Service Connector Hub -> OCI Streaming -> stream consumer -> Splunk HEC.
+
+## SOC4Kafka troubleshooting
+
+If Kafka producers or SOC4Kafka fail with `KafkaTimeoutError: Failed to update
+metadata`, `EOF` during metadata load, or no events appear in Splunk:
+
+1. Confirm `stream_name` exists and is `ACTIVE` in the target compartment. A stale
+   `existing_stream_id` can leave Terraform outputs pointing at a deleted stream.
+2. Confirm the Service Connector target stream is the same active stream.
+3. Use `streaming.<region>.oci.oraclecloud.com:9092` as the Kafka bootstrap host.
+4. Build the SASL username from the same OCI user that owns the auth token:
+   `<tenancy-name>/<full-oci-user-name>/<stream-pool-ocid>`. Identity Domain users
+   usually need the domain-qualified user name, for example
+   `oracleidentitycloudservice/user@example.com`.
+5. Publish a unique marker to the stream and search Splunk for that exact marker.
+
+The live validation for this deployment used the active `Logs2Splunk` stream,
+updated the Service Connector target to that stream, restarted `soc4kafka.service`,
+published a Kafka marker, and found the marker in Splunk.
 
 ## Splunk user management
 

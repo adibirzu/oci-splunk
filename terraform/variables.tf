@@ -15,9 +15,14 @@ variable "project_prefix" {
 }
 
 variable "auth" {
-  description = "OCI provider auth method: ApiKey, SecurityToken, InstancePrincipal, ResourcePrincipal."
+  description = "OCI provider auth method: APIKey, SecurityToken, InstancePrincipal, ResourcePrincipal. ApiKey is accepted as a backward-compatible alias."
   type        = string
-  default     = "ApiKey"
+  default     = "APIKey"
+
+  validation {
+    condition     = contains(["APIKey", "ApiKey", "SecurityToken", "InstancePrincipal", "ResourcePrincipal"], var.auth)
+    error_message = "auth must be one of: APIKey, ApiKey, SecurityToken, InstancePrincipal, ResourcePrincipal."
+  }
 }
 
 variable "oci_profile" {
@@ -155,7 +160,7 @@ variable "allowed_ingress_cidr" {
 variable "splunk_shape" {
   description = "Compute shape for Splunk VM."
   type        = string
-  default     = "VM.Standard.E5.Flex"
+  default     = "VM.Standard.E4.Flex"
 }
 
 variable "splunk_ocpus" {
@@ -253,6 +258,17 @@ variable "create_logs_to_stream_connector" {
   default     = true
 }
 
+variable "stream_consumer_model" {
+  description = "Streaming consumer runtime: legacy Kafka Connect or SOC4Kafka/Splunk OTel Collector."
+  type        = string
+  default     = "legacy_kafka_connect"
+
+  validation {
+    condition     = contains(["legacy_kafka_connect", "soc4kafka"], var.stream_consumer_model)
+    error_message = "stream_consumer_model must be one of: legacy_kafka_connect, soc4kafka."
+  }
+}
+
 variable "service_connector_stream_name" {
   description = "Display name for Logs->Stream Service Connector."
   type        = string
@@ -343,6 +359,12 @@ variable "streaming_user_name" {
   default     = ""
 }
 
+variable "streaming_sasl_username" {
+  description = "Optional full SASL username override for OCI Streaming Kafka auth. Defaults to <tenancy>/<user>/<stream_pool_id>."
+  type        = string
+  default     = ""
+}
+
 variable "streaming_auth_token" {
   description = "OCI auth token used as Kafka SASL password."
   type        = string
@@ -366,4 +388,34 @@ variable "splunk_hec_index" {
   description = "Splunk HEC index."
   type        = string
   default     = "main"
+}
+
+variable "soc4kafka_collector_version" {
+  description = "Splunk OTel Collector version used for SOC4Kafka."
+  type        = string
+  default     = "0.154.1"
+}
+
+variable "soc4kafka_group_id" {
+  description = "Kafka consumer group id used by SOC4Kafka."
+  type        = string
+  default     = "oci-splunk-soc4kafka"
+}
+
+variable "soc4kafka_encoding" {
+  description = "Kafka receiver log encoding used by SOC4Kafka."
+  type        = string
+  default     = "text"
+}
+
+variable "soc4kafka_source" {
+  description = "Splunk source metadata for SOC4Kafka events."
+  type        = string
+  default     = "oci-streaming"
+}
+
+variable "soc4kafka_sourcetype" {
+  description = "Splunk sourcetype metadata for SOC4Kafka events."
+  type        = string
+  default     = "oci:log"
 }

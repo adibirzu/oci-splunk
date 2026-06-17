@@ -8,7 +8,7 @@ locals {
   effective_subnet_id        = local.create_network ? oci_core_subnet.splunk[0].id : var.existing_subnet_id
   effective_stream_pool_id   = local.create_stream_pool ? oci_streaming_stream_pool.splunk[0].id : var.existing_stream_pool_id
   effective_stream_id        = local.create_stream ? oci_streaming_stream.splunk[0].id : var.existing_stream_id
-  generated_bootstrap        = "cell-1.streaming.${var.region}.oci.oraclecloud.com:9092"
+  generated_bootstrap        = "streaming.${var.region}.oci.oraclecloud.com:9092"
   kafka_bootstrap_servers    = var.kafka_bootstrap_servers != "" ? var.kafka_bootstrap_servers : local.generated_bootstrap
   create_new_lb              = local.create_managed_splunk && local.lb_enabled && !local.use_existing_lb
   effective_lb_subnet_id     = local.create_network ? try(oci_core_subnet.lb[0].id, "") : var.existing_lb_subnet_id
@@ -20,12 +20,17 @@ locals {
   kafka_connect_offset_topic = "${local.kafka_connect_topic_prefix}-offset"
   kafka_connect_status_topic = "${local.kafka_connect_topic_prefix}-status"
   splunk_hec_uri             = trimsuffix((length(split("/services/collector", var.splunk_hec_url)) > 1 ? split("/services/collector", var.splunk_hec_url)[0] : var.splunk_hec_url), "/")
+  splunk_hec_collector_uri   = "${local.splunk_hec_uri}/services/collector"
+  streaming_sasl_username    = var.streaming_sasl_username != "" ? var.streaming_sasl_username : "${var.streaming_tenancy_name}/${var.streaming_user_name}/${local.effective_stream_pool_id}"
+  legacy_kafka_connect_model = var.stream_consumer_model == "legacy_kafka_connect"
+  soc4kafka_model            = var.stream_consumer_model == "soc4kafka"
+  oci_auth                   = var.auth == "ApiKey" ? "APIKey" : var.auth
 }
 
 provider "oci" {
   region              = var.region
-  auth                = var.auth
-  config_file_profile = contains(["ApiKey", "SecurityToken"], var.auth) ? var.oci_profile : null
+  auth                = local.oci_auth
+  config_file_profile = contains(["APIKey", "SecurityToken"], local.oci_auth) ? var.oci_profile : null
   tenancy_ocid        = var.tenancy_ocid != "" ? var.tenancy_ocid : null
   user_ocid           = var.user_ocid != "" ? var.user_ocid : null
   fingerprint         = var.fingerprint != "" ? var.fingerprint : null
@@ -65,6 +70,14 @@ resource "terraform_data" "input_guards" {
     precondition {
       condition     = var.use_existing_splunk ? var.splunk_hec_token != "" : true
       error_message = "When use_existing_splunk=true, splunk_hec_token is required."
+    }
+    precondition {
+      condition     = (local.legacy_kafka_connect_model || local.soc4kafka_model) ? (var.streaming_sasl_username != "" || (var.streaming_tenancy_name != "" && var.streaming_user_name != "")) : true
+      error_message = "Streaming Kafka auth requires streaming_sasl_username or both streaming_tenancy_name and streaming_user_name."
+    }
+    precondition {
+      condition     = (local.legacy_kafka_connect_model || local.soc4kafka_model) ? var.streaming_auth_token != "" : true
+      error_message = "streaming_auth_token is required for the stream consumer runtime."
     }
   }
 }
@@ -172,7 +185,7 @@ resource "oci_core_network_security_group" "splunk" {
 }
 
 locals {
-  effective_nsg_id = var.existing_nsg_id != "" ? var.existing_nsg_id : oci_core_network_security_group.splunk[0].id
+  effective_nsg_id = (!local.create_network && var.existing_nsg_id != "") ? var.existing_nsg_id : oci_core_network_security_group.splunk[0].id
 }
 
 resource "oci_core_network_security_group_security_rule" "splunk_ingress_ssh" {
@@ -301,20 +314,38 @@ resource "oci_core_instance" "splunk" {
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
-    user_data = base64encode(templatefile("${path.module}/templates/splunk-cloud-init.tftpl", {
+    user_data           = base64encode(templatefile("${path.module}/templates/splunk-cloud-init.tftpl", {
       splunk_admin_password_b64  = base64encode(var.splunk_admin_password)
       splunk_hec_token_b64       = base64encode(var.splunk_hec_token)
       splunk_hec_index           = var.splunk_hec_index
       splunk_hec_uri             = "http://127.0.0.1:8088"
+      splunk_hec_collector_uri   = "http://127.0.0.1:8088/services/collector"
+      stream_consumer_model      = var.stream_consumer_model
       stream_name                = var.stream_name
       kafka_bootstrap_servers    = local.kafka_bootstrap_servers
       stream_pool_id             = local.effective_stream_pool_id
       streaming_tenancy_name     = var.streaming_tenancy_name
       streaming_user_name        = var.streaming_user_name
+      streaming_sasl_username    = local.streaming_sasl_username
       streaming_auth_token_b64   = base64encode(var.streaming_auth_token)
       kafka_connect_config_topic = local.kafka_connect_config_topic
       kafka_connect_offset_topic = local.kafka_connect_offset_topic
       kafka_connect_status_topic = local.kafka_connect_status_topic
+      soc4kafka_config_b64 = base64encode(templatefile("${path.module}/templates/soc4kafka-config.yaml.tftpl", {
+        kafka_bootstrap_servers_json = jsonencode(local.kafka_bootstrap_servers)
+        stream_name_json             = jsonencode(var.stream_name)
+        streaming_sasl_username_json = jsonencode(local.streaming_sasl_username)
+        streaming_auth_token_json    = jsonencode(var.streaming_auth_token)
+        splunk_hec_token_json        = jsonencode("__SPLUNK_HEC_TOKEN__")
+        splunk_hec_endpoint_json     = jsonencode("http://127.0.0.1:8088/services/collector")
+        splunk_hec_index_json        = jsonencode(var.splunk_hec_index)
+        soc4kafka_group_id_json      = jsonencode(var.soc4kafka_group_id)
+        soc4kafka_client_id_json     = jsonencode("${var.project_prefix}-soc4kafka")
+        soc4kafka_encoding_json      = jsonencode(var.soc4kafka_encoding)
+        soc4kafka_source_json        = jsonencode(var.soc4kafka_source)
+        soc4kafka_sourcetype_json    = jsonencode(var.soc4kafka_sourcetype)
+      }))
+      soc4kafka_collector_version = var.soc4kafka_collector_version
     }))
   }
 
@@ -413,7 +444,7 @@ resource "oci_streaming_stream" "splunk" {
 }
 
 resource "oci_streaming_stream" "kafka_connect_config" {
-  count              = var.create_kafka_connect_internal_streams ? 1 : 0
+  count              = var.create_kafka_connect_internal_streams && local.legacy_kafka_connect_model ? 1 : 0
   name               = local.kafka_connect_config_topic
   partitions         = 1
   stream_pool_id     = local.effective_stream_pool_id
@@ -421,7 +452,7 @@ resource "oci_streaming_stream" "kafka_connect_config" {
 }
 
 resource "oci_streaming_stream" "kafka_connect_offset" {
-  count              = var.create_kafka_connect_internal_streams ? 1 : 0
+  count              = var.create_kafka_connect_internal_streams && local.legacy_kafka_connect_model ? 1 : 0
   name               = local.kafka_connect_offset_topic
   partitions         = 1
   stream_pool_id     = local.effective_stream_pool_id
@@ -429,7 +460,7 @@ resource "oci_streaming_stream" "kafka_connect_offset" {
 }
 
 resource "oci_streaming_stream" "kafka_connect_status" {
-  count              = var.create_kafka_connect_internal_streams ? 1 : 0
+  count              = var.create_kafka_connect_internal_streams && local.legacy_kafka_connect_model ? 1 : 0
   name               = local.kafka_connect_status_topic
   partitions         = 1
   stream_pool_id     = local.effective_stream_pool_id
@@ -507,7 +538,7 @@ resource "oci_sch_service_connector" "logs_to_functions" {
 }
 
 resource "local_file" "kafka_worker_config" {
-  count    = var.generate_local_kafka_artifacts ? 1 : 0
+  count    = var.generate_local_kafka_artifacts && local.legacy_kafka_connect_model ? 1 : 0
   filename = "${path.module}/generated/connect-distributed.properties"
   content = templatefile("${path.module}/templates/connect-distributed.properties.tftpl", {
     kafka_bootstrap_servers = local.kafka_bootstrap_servers
@@ -522,13 +553,32 @@ resource "local_file" "kafka_worker_config" {
 }
 
 resource "local_file" "splunk_sink_connector" {
-  count    = var.generate_local_kafka_artifacts ? 1 : 0
+  count    = var.generate_local_kafka_artifacts && local.legacy_kafka_connect_model ? 1 : 0
   filename = "${path.module}/generated/splunk-sink-connector.json"
   content = templatefile("${path.module}/templates/splunk-sink-connector.json.tftpl", {
     topic_name       = var.stream_name
     splunk_hec_uri   = local.splunk_hec_uri
     splunk_hec_token = var.splunk_hec_token
     splunk_hec_index = var.splunk_hec_index
+  })
+}
+
+resource "local_file" "soc4kafka_config" {
+  count    = var.generate_local_kafka_artifacts && local.soc4kafka_model ? 1 : 0
+  filename = "${path.module}/generated/soc4kafka-config.yaml"
+  content = templatefile("${path.module}/templates/soc4kafka-config.yaml.tftpl", {
+    kafka_bootstrap_servers_json = jsonencode(local.kafka_bootstrap_servers)
+    stream_name_json             = jsonencode(var.stream_name)
+    streaming_sasl_username_json = jsonencode(local.streaming_sasl_username)
+    streaming_auth_token_json    = jsonencode(var.streaming_auth_token)
+    splunk_hec_token_json        = jsonencode(var.splunk_hec_token)
+    splunk_hec_endpoint_json     = jsonencode(local.splunk_hec_collector_uri)
+    splunk_hec_index_json        = jsonencode(var.splunk_hec_index)
+    soc4kafka_group_id_json      = jsonencode(var.soc4kafka_group_id)
+    soc4kafka_client_id_json     = jsonencode("${var.project_prefix}-soc4kafka")
+    soc4kafka_encoding_json      = jsonencode(var.soc4kafka_encoding)
+    soc4kafka_source_json        = jsonencode(var.soc4kafka_source)
+    soc4kafka_sourcetype_json    = jsonencode(var.soc4kafka_sourcetype)
   })
 }
 

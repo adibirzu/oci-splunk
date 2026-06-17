@@ -1,0 +1,52 @@
+receivers:
+  kafka:
+    brokers:
+      - ${kafka_bootstrap_servers_json}
+    group_id: ${soc4kafka_group_id_json}
+    client_id: ${soc4kafka_client_id_json}
+    logs:
+      topics:
+        - ${stream_name_json}
+      encoding: ${soc4kafka_encoding_json}
+    tls:
+      insecure_skip_verify: false
+    auth:
+      sasl:
+        mechanism: PLAIN
+        username: ${streaming_sasl_username_json}
+        password: ${streaming_auth_token_json}
+
+processors:
+  batch:
+  resourcedetection:
+    detectors: ["system"]
+    system:
+      hostname_sources: ["os"]
+
+exporters:
+  splunk_hec:
+    token: ${splunk_hec_token_json}
+    endpoint: ${splunk_hec_endpoint_json}
+    index: ${splunk_hec_index_json}
+    source: ${soc4kafka_source_json}
+    sourcetype: ${soc4kafka_sourcetype_json}
+    tls:
+      insecure_skip_verify: false
+    retry_on_failure:
+      enabled: true
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 10000
+      block_on_overflow: true
+      sizer: items
+      batch:
+        min_size: 1000
+    splunk_app_name: soc4kafka
+
+service:
+  pipelines:
+    logs:
+      receivers: [kafka]
+      processors: [resourcedetection, batch]
+      exporters: [splunk_hec]

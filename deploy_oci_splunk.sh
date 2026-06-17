@@ -113,6 +113,17 @@ hec_base_uri_from_url() {
   echo "${base}"
 }
 
+hec_collector_url_from_url() {
+  local url="$1"
+  local base
+  base="$(hec_base_uri_from_url "${url}")"
+  if [[ -n "${base}" ]]; then
+    echo "${base}/services/collector"
+  else
+    echo "${url%/event}"
+  fi
+}
+
 hec_health_url_from_url() {
   local url="$1"
   local base
@@ -134,6 +145,25 @@ is_placeholder_hec_url() {
   local url="${1:-}"
   [[ -z "${url}" ]] && return 0
   [[ "${url}" == "https://splunk.example.com:8088/services/collector/event" || "${url}" == "http://127.0.0.1:8088/services/collector/event" ]]
+}
+
+validate_stream_consumer_model() {
+  case "${STREAM_CONSUMER_MODEL}" in
+    legacy_kafka_connect|soc4kafka) ;;
+    *) fail "STREAM_CONSUMER_MODEL must be legacy_kafka_connect or soc4kafka" ;;
+  esac
+}
+
+streaming_sasl_username() {
+  if [[ -n "${STREAMING_SASL_USERNAME}" ]]; then
+    echo "${STREAMING_SASL_USERNAME}"
+    return
+  fi
+
+  [[ -n "${TENANCY_NAME}" ]] || fail "TENANCY_NAME is required for Kafka SASL username"
+  [[ -n "${STREAMING_USER_NAME}" ]] || fail "STREAMING_USER_NAME is required for Kafka SASL username"
+  [[ -n "${STREAM_POOL_OCID:-}" ]] || fail "STREAM_POOL_OCID is required for Kafka SASL username"
+  echo "${TENANCY_NAME}/${STREAMING_USER_NAME}/${STREAM_POOL_OCID}"
 }
 
 autodetect_oci_profile() {
@@ -163,6 +193,7 @@ autodetect_oci_profile() {
 autodetect_oci_profile
 
 MODE="${MODE:-kafka}"                         # kafka | functions | both
+STREAM_CONSUMER_MODEL="${STREAM_CONSUMER_MODEL:-legacy_kafka_connect}" # legacy_kafka_connect | soc4kafka
 CREATE_SPLUNK_INSTANCE="${CREATE_SPLUNK_INSTANCE:-true}"
 CREATE_STREAMING="${CREATE_STREAMING:-true}"
 CREATE_CONNECTOR_LOGS_TO_STREAM="${CREATE_CONNECTOR_LOGS_TO_STREAM:-true}"
@@ -192,7 +223,7 @@ IGW_NAME="${IGW_NAME:-${PROJECT_PREFIX}-igw}"
 RT_NAME="${RT_NAME:-${PROJECT_PREFIX}-rt}"
 
 SPLUNK_INSTANCE_NAME="${SPLUNK_INSTANCE_NAME:-${PROJECT_PREFIX}-splunk}"
-SPLUNK_SHAPE="${SPLUNK_SHAPE:-VM.Standard.E5.Flex}"
+SPLUNK_SHAPE="${SPLUNK_SHAPE:-VM.Standard.E4.Flex}"
 SPLUNK_OCPUS="${SPLUNK_OCPUS:-2}"
 SPLUNK_MEMORY_GBS="${SPLUNK_MEMORY_GBS:-16}"
 SPLUNK_BOOT_VOLUME_GBS="${SPLUNK_BOOT_VOLUME_GBS:-100}"
@@ -225,6 +256,7 @@ LOG_OCID="${LOG_OCID:-}"
 KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-}"
 TENANCY_NAME="${TENANCY_NAME:-}"
 STREAMING_USER_NAME="${STREAMING_USER_NAME:-}"
+STREAMING_SASL_USERNAME="${STREAMING_SASL_USERNAME:-}"
 STREAMING_USER_OCID="${STREAMING_USER_OCID:-}"
 STREAMING_AUTH_TOKEN="${STREAMING_AUTH_TOKEN:-}"
 
@@ -232,6 +264,12 @@ SPLUNK_HEC_URL="${SPLUNK_HEC_URL:-https://splunk.example.com:8088/services/colle
 SPLUNK_HEC_TOKEN="${SPLUNK_HEC_TOKEN:-replace-with-hec-token}"
 SPLUNK_HEC_INDEX="${SPLUNK_HEC_INDEX:-main}"
 EXISTING_SPLUNK_WEB_URL="${EXISTING_SPLUNK_WEB_URL:-}"
+
+SOC4KAFKA_COLLECTOR_VERSION="${SOC4KAFKA_COLLECTOR_VERSION:-0.154.1}"
+SOC4KAFKA_GROUP_ID="${SOC4KAFKA_GROUP_ID:-oci-splunk-soc4kafka}"
+SOC4KAFKA_ENCODING="${SOC4KAFKA_ENCODING:-text}"
+SOC4KAFKA_SOURCE="${SOC4KAFKA_SOURCE:-oci-streaming}"
+SOC4KAFKA_SOURCETYPE="${SOC4KAFKA_SOURCETYPE:-oci:log}"
 
 FN_APP_NAME="${FN_APP_NAME:-${PROJECT_PREFIX}-fn-app}"
 FN_NAME="${FN_NAME:-splunk-hec-forwarder}"
@@ -609,16 +647,14 @@ maybe_create_auth_token() {
 create_kafka_connect_files() {
   [[ -n "${STREAM_POOL_OCID:-}" ]] || fail "STREAM_POOL_OCID is missing"
   [[ -n "${STREAM_OCID:-}" ]] || fail "STREAM_OCID is missing"
-  [[ -n "${TENANCY_NAME}" ]] || fail "TENANCY_NAME is required for Kafka SASL username"
-  [[ -n "${STREAMING_USER_NAME}" ]] || fail "STREAMING_USER_NAME is required for Kafka SASL username"
   [[ -n "${STREAMING_AUTH_TOKEN}" ]] || fail "STREAMING_AUTH_TOKEN is required for Kafka SASL password"
 
   if [[ -z "${KAFKA_BOOTSTRAP_SERVERS}" ]]; then
-    KAFKA_BOOTSTRAP_SERVERS="cell-1.streaming.${REGION}.oci.oraclecloud.com:9092"
+    KAFKA_BOOTSTRAP_SERVERS="streaming.${REGION}.oci.oraclecloud.com:9092"
   fi
 
   local sasl_username splunk_hec_uri
-  sasl_username="${TENANCY_NAME}/${STREAMING_USER_NAME}/${STREAM_POOL_OCID}"
+  sasl_username="$(streaming_sasl_username)"
   splunk_hec_uri="$(hec_base_uri_from_url "${SPLUNK_HEC_URL}")"
   [[ -n "${splunk_hec_uri}" ]] || splunk_hec_uri="${SPLUNK_HEC_URL}"
 
@@ -682,8 +718,108 @@ TXT
   log "Generated Kafka Connect files under ${OUTPUT_DIR}"
 }
 
+create_soc4kafka_files() {
+  [[ -n "${STREAM_POOL_OCID:-}" ]] || fail "STREAM_POOL_OCID is missing"
+  [[ -n "${STREAM_OCID:-}" ]] || fail "STREAM_OCID is missing"
+  [[ -n "${STREAMING_AUTH_TOKEN}" ]] || fail "STREAMING_AUTH_TOKEN is required for SOC4Kafka"
+  [[ -n "${SPLUNK_HEC_TOKEN}" ]] || fail "SPLUNK_HEC_TOKEN is required for SOC4Kafka"
+
+  if [[ -z "${KAFKA_BOOTSTRAP_SERVERS}" ]]; then
+    KAFKA_BOOTSTRAP_SERVERS="streaming.${REGION}.oci.oraclecloud.com:9092"
+  fi
+
+  local sasl_username splunk_hec_endpoint
+  sasl_username="$(streaming_sasl_username)"
+  splunk_hec_endpoint="$(hec_collector_url_from_url "${SPLUNK_HEC_URL}")"
+
+  local kafka_bootstrap_json group_id_json client_id_json stream_name_json encoding_json
+  local sasl_username_json streaming_auth_token_json hec_token_json hec_endpoint_json
+  local hec_index_json source_json sourcetype_json
+  kafka_bootstrap_json="$(jq -Rn --arg v "${KAFKA_BOOTSTRAP_SERVERS}" '$v')"
+  group_id_json="$(jq -Rn --arg v "${SOC4KAFKA_GROUP_ID}" '$v')"
+  client_id_json="$(jq -Rn --arg v "${PROJECT_PREFIX}-soc4kafka" '$v')"
+  stream_name_json="$(jq -Rn --arg v "${STREAM_NAME}" '$v')"
+  encoding_json="$(jq -Rn --arg v "${SOC4KAFKA_ENCODING}" '$v')"
+  sasl_username_json="$(jq -Rn --arg v "${sasl_username}" '$v')"
+  streaming_auth_token_json="$(jq -Rn --arg v "${STREAMING_AUTH_TOKEN}" '$v')"
+  hec_token_json="$(jq -Rn --arg v "${SPLUNK_HEC_TOKEN}" '$v')"
+  hec_endpoint_json="$(jq -Rn --arg v "${splunk_hec_endpoint}" '$v')"
+  hec_index_json="$(jq -Rn --arg v "${SPLUNK_HEC_INDEX}" '$v')"
+  source_json="$(jq -Rn --arg v "${SOC4KAFKA_SOURCE}" '$v')"
+  sourcetype_json="$(jq -Rn --arg v "${SOC4KAFKA_SOURCETYPE}" '$v')"
+
+  cat >"${OUTPUT_DIR}/soc4kafka-config.yaml" <<YAML
+receivers:
+  kafka:
+    brokers:
+      - ${kafka_bootstrap_json}
+    group_id: ${group_id_json}
+    client_id: ${client_id_json}
+    logs:
+      topics:
+        - ${stream_name_json}
+      encoding: ${encoding_json}
+    tls:
+      insecure_skip_verify: false
+    auth:
+      sasl:
+        mechanism: PLAIN
+        username: ${sasl_username_json}
+        password: ${streaming_auth_token_json}
+
+processors:
+  batch:
+  resourcedetection:
+    detectors: ["system"]
+    system:
+      hostname_sources: ["os"]
+
+exporters:
+  splunk_hec:
+    token: ${hec_token_json}
+    endpoint: ${hec_endpoint_json}
+    index: ${hec_index_json}
+    source: ${source_json}
+    sourcetype: ${sourcetype_json}
+    tls:
+      insecure_skip_verify: false
+    retry_on_failure:
+      enabled: true
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 10000
+      block_on_overflow: true
+      sizer: items
+      batch:
+        min_size: 1000
+    splunk_app_name: soc4kafka
+
+service:
+  pipelines:
+    logs:
+      receivers: [kafka]
+      processors: [resourcedetection, batch]
+      exporters: [splunk_hec]
+YAML
+
+  cat >"${OUTPUT_DIR}/soc4kafka-runbook.txt" <<TXT
+1) Download Splunk OTel Collector ${SOC4KAFKA_COLLECTOR_VERSION} for your platform:
+   https://github.com/signalfx/splunk-otel-collector/releases/tag/v${SOC4KAFKA_COLLECTOR_VERSION}
+2) Copy soc4kafka-config.yaml to the host that will consume OCI Streaming.
+3) Start the collector:
+   ./otelcol_linux_amd64 --config soc4kafka-config.yaml
+4) For managed Splunk deployments, deploy_oci_splunk.sh can install this as soc4kafka.service automatically.
+TXT
+
+  log "Generated SOC4Kafka files under ${OUTPUT_DIR}"
+}
+
 configure_kafka_connect_on_managed_splunk() {
   if [[ "${MODE}" != "kafka" && "${MODE}" != "both" ]]; then
+    return
+  fi
+  if [[ "${STREAM_CONSUMER_MODEL}" != "legacy_kafka_connect" ]]; then
     return
   fi
   if [[ "${AUTO_CONFIGURE_KAFKA_CONNECT_ON_VM}" != "true" ]]; then
@@ -695,8 +831,6 @@ configure_kafka_connect_on_managed_splunk() {
   [[ -n "${SPLUNK_INSTANCE_PUBLIC_IP:-}" ]] || fail "SPLUNK_INSTANCE_PUBLIC_IP is missing for Kafka Connect auto-configuration"
   [[ -n "${STREAM_POOL_OCID:-}" ]] || fail "STREAM_POOL_OCID is missing for Kafka Connect auto-configuration"
   [[ -n "${STREAM_OCID:-}" ]] || fail "STREAM_OCID is missing for Kafka Connect auto-configuration"
-  [[ -n "${TENANCY_NAME}" ]] || fail "TENANCY_NAME is required for Kafka Connect auto-configuration"
-  [[ -n "${STREAMING_USER_NAME}" ]] || fail "STREAMING_USER_NAME is required for Kafka Connect auto-configuration"
   [[ -n "${STREAMING_AUTH_TOKEN}" ]] || fail "STREAMING_AUTH_TOKEN is required for Kafka Connect auto-configuration"
   [[ -n "${SPLUNK_HEC_TOKEN}" ]] || fail "SPLUNK_HEC_TOKEN is required for Kafka Connect auto-configuration"
 
@@ -704,7 +838,7 @@ configure_kafka_connect_on_managed_splunk() {
   [[ -n "${ssh_key_path}" && -f "${ssh_key_path}" ]] || fail "SSH private key not found for managed Splunk VM"
 
   if [[ -z "${KAFKA_BOOTSTRAP_SERVERS}" ]]; then
-    KAFKA_BOOTSTRAP_SERVERS="cell-1.streaming.${REGION}.oci.oraclecloud.com:9092"
+    KAFKA_BOOTSTRAP_SERVERS="streaming.${REGION}.oci.oraclecloud.com:9092"
   fi
 
   local splunk_hec_uri
@@ -713,7 +847,8 @@ configure_kafka_connect_on_managed_splunk() {
 
   log "Configuring Kafka Connect + Splunk sink connector on managed Splunk VM"
 
-  local remote_cmd
+  local remote_cmd sasl_username
+  sasl_username="$(streaming_sasl_username)"
   remote_cmd="$(cat <<EOF
 set -euo pipefail
 sudo bash -lc '
@@ -725,7 +860,7 @@ KAFKA_ARCHIVE=/tmp/kafka_\${KAFKA_SCALA}-\${KAFKA_VERSION}.tgz
 PLUGIN_DIR=\${KAFKA_HOME}/plugins
 SPLUNK_CONNECTOR_JAR=\${PLUGIN_DIR}/splunk-kafka-connect-v2.2.4.jar
 SPLUNK_CONNECTOR_URL=https://github.com/splunk/kafka-connect-splunk/releases/download/v2.2.4/splunk-kafka-connect-v2.2.4.jar
-SASL_USERNAME="${TENANCY_NAME}/${STREAMING_USER_NAME}/${STREAM_POOL_OCID}"
+SASL_USERNAME="${sasl_username}"
 BOOTSTRAP="${KAFKA_BOOTSTRAP_SERVERS}"
 STREAMING_AUTH_TOKEN="${STREAMING_AUTH_TOKEN}"
 STREAM_NAME="${STREAM_NAME}"
@@ -812,6 +947,100 @@ EOF
     "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" "${remote_cmd}"
 
   log "Kafka Connect service configured and started on ${SPLUNK_INSTANCE_PUBLIC_IP}"
+}
+
+configure_soc4kafka_on_managed_splunk() {
+  if [[ "${MODE}" != "kafka" && "${MODE}" != "both" ]]; then
+    return
+  fi
+  if [[ "${STREAM_CONSUMER_MODEL}" != "soc4kafka" ]]; then
+    return
+  fi
+  if [[ "${AUTO_CONFIGURE_KAFKA_CONNECT_ON_VM}" != "true" ]]; then
+    return
+  fi
+  if [[ "${CREATE_SPLUNK_INSTANCE}" != "true" || "${USE_EXISTING_SPLUNK}" == "true" ]]; then
+    return
+  fi
+  [[ -n "${SPLUNK_INSTANCE_PUBLIC_IP:-}" ]] || fail "SPLUNK_INSTANCE_PUBLIC_IP is missing for SOC4Kafka auto-configuration"
+
+  local ssh_key_path="${SELECTED_SSH_PRIVATE_KEY_PATH:-${SPLUNK_SSH_PUBLIC_KEY_PATH%.pub}}"
+  [[ -n "${ssh_key_path}" && -f "${ssh_key_path}" ]] || fail "SSH private key not found for managed Splunk VM"
+
+  if [[ ! -f "${OUTPUT_DIR}/soc4kafka-config.yaml" ]]; then
+    create_soc4kafka_files
+  fi
+
+  local config_b64
+  config_b64="$(base64 < "${OUTPUT_DIR}/soc4kafka-config.yaml" | tr -d '\n')"
+
+  log "Configuring SOC4Kafka collector on managed Splunk VM"
+
+  local remote_cmd
+  remote_cmd="$(cat <<EOF
+set -euo pipefail
+sudo bash -lc '
+set -euo pipefail
+SOC4KAFKA_HOME=/opt/soc4kafka
+SOC4KAFKA_BIN=\${SOC4KAFKA_HOME}/otelcol
+SOC4KAFKA_CONFIG=\${SOC4KAFKA_HOME}/config.yaml
+SOC4KAFKA_VERSION="${SOC4KAFKA_COLLECTOR_VERSION}"
+SOC4KAFKA_CONFIG_B64="${config_b64}"
+
+if command -v dnf >/dev/null 2>&1; then
+  dnf install -y wget ca-certificates >/dev/null
+elif command -v apt-get >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y >/dev/null
+  apt-get install -y wget ca-certificates >/dev/null
+fi
+
+mkdir -p "\${SOC4KAFKA_HOME}"
+ARCH=amd64
+case "\$(uname -m)" in
+  x86_64) ARCH=amd64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+  *) echo "Unsupported architecture for SOC4Kafka collector: \$(uname -m)"; exit 1 ;;
+esac
+
+wget -q -O "\${SOC4KAFKA_BIN}" "https://github.com/signalfx/splunk-otel-collector/releases/download/v\${SOC4KAFKA_VERSION}/otelcol_linux_\${ARCH}"
+chmod 0755 "\${SOC4KAFKA_BIN}"
+printf "%s" "\${SOC4KAFKA_CONFIG_B64}" | base64 -d >"\${SOC4KAFKA_CONFIG}"
+chmod 0600 "\${SOC4KAFKA_CONFIG}"
+
+systemctl disable --now kafka-connect >/dev/null 2>&1 || true
+
+cat >/etc/systemd/system/soc4kafka.service <<SERVICE
+[Unit]
+Description=SOC4Kafka Splunk OTel Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=\${SOC4KAFKA_BIN} --config \${SOC4KAFKA_CONFIG}
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable soc4kafka >/dev/null
+systemctl restart soc4kafka
+sleep 5
+systemctl is-active soc4kafka >/dev/null
+'
+EOF
+)"
+
+  ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i "${ssh_key_path}" \
+    "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" "${remote_cmd}"
+
+  log "SOC4Kafka service configured and started on ${SPLUNK_INSTANCE_PUBLIC_IP}"
 }
 
 write_function_template() {
@@ -983,11 +1212,14 @@ Resources:
 
 Generated files:
 - ${OUTPUT_DIR}/splunk-cloud-init.yaml
-- ${OUTPUT_DIR}/connect-distributed.properties (if Kafka mode)
-- ${OUTPUT_DIR}/splunk-sink-connector.json (if Kafka mode)
+- ${OUTPUT_DIR}/connect-distributed.properties (legacy Kafka Connect mode)
+- ${OUTPUT_DIR}/splunk-sink-connector.json (legacy Kafka Connect mode)
+- ${OUTPUT_DIR}/soc4kafka-config.yaml (SOC4Kafka mode)
+- ${OUTPUT_DIR}/soc4kafka-runbook.txt (SOC4Kafka mode)
 - ${SCRIPT_DIR}/functions/${FN_NAME} (if Functions mode)
 
 Connection:
+- Stream Consumer Model: ${STREAM_CONSUMER_MODEL}
 - Splunk Web URL: ${EXISTING_SPLUNK_WEB_URL:-http://${SPLUNK_INSTANCE_PUBLIC_IP:-unknown}:8000}
 - Splunk HEC URL: ${SPLUNK_HEC_URL}
 - Splunk HEC Token: ${SPLUNK_HEC_TOKEN}
@@ -1038,9 +1270,16 @@ verify_deployment() {
   if [[ "${MODE}" == "kafka" || "${MODE}" == "both" ]]; then
     if [[ "${AUTO_CONFIGURE_KAFKA_CONNECT_ON_VM}" == "true" && "${CREATE_SPLUNK_INSTANCE}" == "true" && "${USE_EXISTING_SPLUNK}" != "true" ]]; then
       local ssh_key_path="${SELECTED_SSH_PRIVATE_KEY_PATH:-${SPLUNK_SSH_PUBLIC_KEY_PATH%.pub}}"
-      [[ -f "${ssh_key_path}" ]] || fail "SSH private key missing for kafka-connect verification: ${ssh_key_path}"
-      ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${ssh_key_path}" "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" \
-        "sudo systemctl is-active kafka-connect >/dev/null" || fail "kafka-connect service is not active on managed Splunk VM"
+      [[ -f "${ssh_key_path}" ]] || fail "SSH private key missing for stream consumer verification: ${ssh_key_path}"
+      if [[ "${STREAM_CONSUMER_MODEL}" == "legacy_kafka_connect" ]]; then
+        ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${ssh_key_path}" "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" \
+          "sudo systemctl is-active kafka-connect >/dev/null" || fail "kafka-connect service is not active on managed Splunk VM"
+      else
+        ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${ssh_key_path}" "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" \
+          "sudo systemctl is-active soc4kafka >/dev/null" || fail "soc4kafka service is not active on managed Splunk VM"
+        ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${ssh_key_path}" "opc@${SPLUNK_INSTANCE_PUBLIC_IP}" \
+          "! sudo systemctl is-active kafka-connect >/dev/null 2>&1" || fail "kafka-connect service is active in SOC4Kafka mode"
+      fi
     fi
   fi
 }
@@ -1049,6 +1288,7 @@ main() {
   need_cmd oci
   need_cmd jq
   need_cmd base64
+  validate_stream_consumer_model
   prepare_ssh_key_material
 
   [[ -n "${REGION}" ]] || fail "REGION is required. Set it in .env or ~/.oci/config (${OCI_PROFILE})."
@@ -1061,7 +1301,7 @@ main() {
     log "USE_EXISTING_SPLUNK=true, skipping managed Splunk VM creation"
   fi
 
-  log "Starting deployment with MODE=${MODE}"
+  log "Starting deployment with MODE=${MODE}, STREAM_CONSUMER_MODEL=${STREAM_CONSUMER_MODEL}"
 
   if [[ "${CREATE_SPLUNK_INSTANCE}" == "true" ]]; then
     create_network
@@ -1082,9 +1322,14 @@ main() {
     fi
     maybe_create_auth_token
     if [[ "${CREATE_KAFKA_CONNECT_FILES}" == "true" ]]; then
-      create_kafka_connect_files
+      if [[ "${STREAM_CONSUMER_MODEL}" == "legacy_kafka_connect" ]]; then
+        create_kafka_connect_files
+      else
+        create_soc4kafka_files
+      fi
     fi
     configure_kafka_connect_on_managed_splunk
+    configure_soc4kafka_on_managed_splunk
   fi
 
   if [[ "${MODE}" == "functions" || "${MODE}" == "both" ]]; then

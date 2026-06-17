@@ -51,6 +51,11 @@ output "splunk_hec_endpoint" {
   description = "Splunk HEC endpoint URL on port 8088."
 }
 
+output "stream_consumer_model" {
+  value       = var.stream_consumer_model
+  description = "Streaming consumer runtime selected for the deployment."
+}
+
 output "stream_pool_id" {
   value       = local.effective_stream_pool_id
   description = "Streaming pool OCID."

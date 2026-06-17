@@ -8,12 +8,17 @@ SPLUNK_HEC_TOKEN="$(printf '%s' '${splunk_hec_token_b64}' | base64 -d)"
 STREAMING_AUTH_TOKEN="$(printf '%s' '${streaming_auth_token_b64}' | base64 -d)"
 SPLUNK_HEC_INDEX='${splunk_hec_index}'
 SPLUNK_HEC_URI='${splunk_hec_uri}'
+SPLUNK_HEC_COLLECTOR_URI='${splunk_hec_collector_uri}'
+STREAM_CONSUMER_MODEL='${stream_consumer_model}'
 STREAM_NAME='${stream_name}'
 BOOTSTRAP_SERVERS='${kafka_bootstrap_servers}'
 STREAM_POOL_ID='${stream_pool_id}'
 TENANCY_NAME='${streaming_tenancy_name}'
 STREAMING_USER_NAME='${streaming_user_name}'
+STREAMING_SASL_USERNAME='${streaming_sasl_username}'
 CONNECT_OFFSET_FILE='/var/lib/kafka-connect/offsets.dat'
+SOC4KAFKA_CONFIG_B64='${soc4kafka_config_b64}'
+SOC4KAFKA_COLLECTOR_VERSION='${soc4kafka_collector_version}'
 
 SPLUNK_VERSION='10.2.0'
 SPLUNK_BUILD='d749cb17ea65'
@@ -28,6 +33,9 @@ KAFKA_HOME='/opt/kafka'
 KAFKA_CONNECT_PLUGIN_DIR='/opt/kafka/plugins'
 SPLUNK_CONNECTOR_JAR_URL='https://github.com/splunk/kafka-connect-splunk/releases/download/v2.2.4/splunk-kafka-connect-v2.2.4.jar'
 SPLUNK_CONNECTOR_JAR='/opt/kafka/plugins/splunk-kafka-connect-v2.2.4.jar'
+SOC4KAFKA_HOME='/opt/soc4kafka'
+SOC4KAFKA_BIN='/opt/soc4kafka/otelcol'
+SOC4KAFKA_CONFIG='/opt/soc4kafka/config.yaml'
 
 retry() {
   local attempts="$1"
@@ -66,7 +74,7 @@ run_as_splunk() {
 
 install_prereqs() {
   if command -v dnf >/dev/null 2>&1; then
-    dnf install -y wget tar gzip java-17-openjdk-headless curl jq
+    dnf install -y wget tar gzip java-17-openjdk-headless curl jq python3
     systemctl disable --now firewalld >/dev/null 2>&1 || true
     return 0
   fi
@@ -74,7 +82,7 @@ install_prereqs() {
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
-    apt-get install -y wget tar gzip openjdk-17-jre-headless curl jq ca-certificates
+    apt-get install -y wget tar gzip openjdk-17-jre-headless curl jq ca-certificates python3
     systemctl disable --now ufw >/dev/null 2>&1 || true
     return 0
   fi
@@ -173,6 +181,7 @@ run_as_splunk /opt/splunk/bin/splunk restart --answer-yes --no-prompt
 wait_for_port 127.0.0.1 8000 300
 wait_for_port 127.0.0.1 8088 300
 
+%{ if stream_consumer_model == "legacy_kafka_connect" ~}
 if [[ ! -x "$KAFKA_HOME/bin/connect-standalone.sh" ]]; then
   retry 5 wget --tries=3 --timeout=30 -O "$KAFKA_ARCHIVE" "https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_$KAFKA_SCALA-$KAFKA_VERSION.tgz"
   tar -xzf "$KAFKA_ARCHIVE" -C /opt
@@ -183,7 +192,10 @@ fi
 mkdir -p "$KAFKA_CONNECT_PLUGIN_DIR"
 retry 5 wget --tries=3 --timeout=30 -O "$SPLUNK_CONNECTOR_JAR" "$SPLUNK_CONNECTOR_JAR_URL"
 
-SASL_USERNAME="$TENANCY_NAME/$STREAMING_USER_NAME/$STREAM_POOL_ID"
+SASL_USERNAME="$STREAMING_SASL_USERNAME"
+if [[ -z "$SASL_USERNAME" ]]; then
+  SASL_USERNAME="$TENANCY_NAME/$STREAMING_USER_NAME/$STREAM_POOL_ID"
+fi
 
 # Standalone mode: offsets stored locally, no compacted-topic dependency on OCI Streaming.
 mkdir -p "$(dirname "$CONNECT_OFFSET_FILE")"
@@ -231,3 +243,48 @@ EOF_SERVICE
 systemctl daemon-reload
 systemctl enable kafka-connect
 systemctl restart kafka-connect
+%{ else ~}
+mkdir -p "$SOC4KAFKA_HOME"
+
+SOC4KAFKA_ARCH="amd64"
+case "$(uname -m)" in
+  x86_64) SOC4KAFKA_ARCH="amd64" ;;
+  aarch64|arm64) SOC4KAFKA_ARCH="arm64" ;;
+  *) echo "Unsupported architecture for SOC4Kafka collector: $(uname -m)"; exit 1 ;;
+esac
+
+retry 5 wget --tries=3 --timeout=30 -O "$SOC4KAFKA_BIN" "https://github.com/signalfx/splunk-otel-collector/releases/download/v$SOC4KAFKA_COLLECTOR_VERSION/otelcol_linux_$SOC4KAFKA_ARCH"
+chmod 0755 "$SOC4KAFKA_BIN"
+SOC4KAFKA_CONFIG_TEMPLATE="$(printf '%s' "$SOC4KAFKA_CONFIG_B64" | base64 -d)"
+SOC4KAFKA_CONFIG_TEMPLATE="$SOC4KAFKA_CONFIG_TEMPLATE" SPLUNK_HEC_TOKEN="$SPLUNK_HEC_TOKEN" python3 - <<'PY' >"$SOC4KAFKA_CONFIG"
+import json
+import os
+
+config = os.environ["SOC4KAFKA_CONFIG_TEMPLATE"]
+config = config.replace('"__SPLUNK_HEC_TOKEN__"', json.dumps(os.environ["SPLUNK_HEC_TOKEN"]))
+print(config, end="")
+PY
+chmod 0600 "$SOC4KAFKA_CONFIG"
+
+cat >/etc/systemd/system/soc4kafka.service <<EOF_SERVICE
+[Unit]
+Description=SOC4Kafka Splunk OTel Collector
+After=network-online.target splunk.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=$SOC4KAFKA_BIN --config $SOC4KAFKA_CONFIG
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+
+systemctl daemon-reload
+systemctl enable soc4kafka
+systemctl restart soc4kafka
+%{ endif ~}

@@ -6,6 +6,16 @@
   - https://github.com/splunk/kafka-connect-splunk
 - Splunk Kafka Connect docs
   - https://docs.splunk.com/Documentation/KafkaConnect/2.0.9/User/About
+- Splunk SOC4Kafka announcement
+  - https://community.splunk.com/t5/Product-News-Announcements/SOC4Kafka-New-Kafka-Connector-Powered-by-OpenTelemetry/ba-p/753822
+- SOC4Kafka collector README
+  - https://github.com/splunk/splunk-opentelemetry-collector-for-kafka
+- SOC4Kafka migration guide
+  - https://github.com/splunk/splunk-opentelemetry-collector-for-kafka/blob/main/docs/migration.md
+- OpenTelemetry Kafka receiver
+  - https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kafkareceiver
+- OpenTelemetry Splunk HEC exporter
+  - https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/splunkhecexporter
 - Splunk HEC CLI setup (official)
   - https://help.splunk.com/en/splunk-enterprise/get-data-in/get-started-with-getting-data-in/10.0/get-data-with-http-event-collector/set-up-and-use-http-event-collector-from-the-cli
 - Splunk community: create HEC token from Linux CLI
@@ -14,6 +24,10 @@
   - https://github.com/splunk/splunk-ansible
 - OCI Streaming service docs
   - https://docs.oracle.com/iaas/Content/Streaming/home.htm
+- OCI Streaming Kafka compatibility
+  - https://docs.oracle.com/en-us/iaas/Content/Streaming/Tasks/kafkacompatibility.htm
+- OCI Streaming Kafka API authentication
+  - https://docs.oracle.com/en-us/iaas/Content/Streaming/Tasks/kafkacompatibility_topic-Configuration.htm
 - OCI Service Connector Hub docs
   - https://docs.oracle.com/iaas/Content/service-connector-hub/home.htm
 - OCI Resource Manager docs

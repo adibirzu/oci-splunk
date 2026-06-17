@@ -1,18 +1,23 @@
 # Architecture
 
-## Managed Splunk mode
+## Common pipeline
 
 1. OCI Logging writes events into selected log.
 2. OCI Service Connector moves events from Logging to OCI Streaming stream.
-3. Kafka Connect worker consumes the stream via OCI Streaming Kafka compatibility endpoint.
-4. Splunk Sink Connector posts events to Splunk HEC.
-5. Splunk indexes and exposes events in Splunk UI.
-6. If HEC token is placeholder, bootstrap generates token post-provisioning and persists it in `/opt/oci-splunk/runtime.env`.
+3. A Kafka-compatible consumer reads the stream and posts events to Splunk HEC.
+4. Splunk indexes and exposes events in Splunk UI.
+5. If HEC token is placeholder, bootstrap generates token post-provisioning and persists it in `/opt/oci-splunk/runtime.env`.
+
+## Consumer models
+
+- `legacy_kafka_connect` (default): Kafka Connect standalone consumes OCI Streaming through the Kafka compatibility endpoint, then the Splunk Sink Connector posts to the base HEC URI.
+- `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consumes OCI Streaming through the Kafka compatibility endpoint, then the `splunk_hec` exporter posts to `/services/collector`.
+- OCI Streaming + SOC4Kafka is compatibility-gated. Splunk lists Apache Kafka, Amazon MSK, and Confluent Platform for SOC4Kafka; OCI Streaming supports the Kafka consumer/group APIs this project uses.
 
 ## Existing Splunk mode
 
 1. OCI Logging -> Service Connector -> OCI Streaming is unchanged.
-2. Kafka Connect worker posts to existing Splunk HEC URL/token you provide.
+2. The selected stream consumer posts to existing Splunk HEC URL/token you provide.
 3. Splunk instance is not created by this stack.
 
 ## Security model

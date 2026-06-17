@@ -1,11 +1,11 @@
 # Required for managed Splunk mode
-compartment_ocid       = "ocid1.compartment.oc1..replace-with-compartment-ocid"
+compartment_ocid       = "<COMPARTMENT_OCID>"
 region                 = "us-ashburn-1"
 allowed_ingress_cidr   = "203.0.113.10/32"
 ssh_public_key         = "ssh-rsa AAAAB3Nza..."
 splunk_admin_password  = "ChangeMe123!"
-log_group_ocid         = "ocid1.loggroup.oc1..replace"
-log_ocid               = "ocid1.log.oc1..replace"
+log_group_ocid         = "<LOG_GROUP_OCID>"
+log_ocid               = "<LOG_OCID>"
 splunk_hec_token       = "replace-with-hec-token"
 
 # Optional auth overrides for non-default profiles
@@ -15,30 +15,43 @@ splunk_hec_token       = "replace-with-hec-token"
 
 # Network mode: create end-to-end (default) or use existing
 use_existing_network = false
-# existing_vcn_id    = "ocid1.vcn.oc1..replace"
-# existing_subnet_id = "ocid1.subnet.oc1..replace"
-# existing_nsg_id    = "ocid1.networksecuritygroup.oc1..replace"
+# existing_vcn_id    = "<VCN_OCID>"
+# existing_subnet_id = "<SUBNET_OCID>"
+# existing_nsg_id    = "<NSG_OCID>"
 
 # If true, Splunk VM is private and stack creates LB subnet + public LB automatically
 create_private_splunk_subnet = false
 enable_load_balancer_for_private = true
 
 # Reuse an existing LB (for private subnet use-cases)
-# existing_load_balancer_id = "ocid1.loadbalancer.oc1..replace"
-# existing_lb_subnet_id     = "ocid1.subnet.oc1..replace"
+# existing_load_balancer_id = "<LOAD_BALANCER_OCID>"
+# existing_lb_subnet_id     = "<SUBNET_OCID>"
 
-# Streaming / Kafka Connect
+# Streaming consumer model
+# Default preserves the existing Kafka Connect standalone deployment.
+stream_consumer_model = "legacy_kafka_connect"
+# stream_consumer_model = "soc4kafka"
+
+# Streaming / Kafka-compatible consumer auth
 stream_pool_name = "oci-splunk-pool"
 stream_name      = "oci-splunk-stream"
 streaming_tenancy_name = "yourtenancyname"
-streaming_user_name    = "your.user"
+streaming_user_name    = "oracleidentitycloudservice/your.user@example.com"
 streaming_auth_token   = "replace-with-oci-auth-token"
+# streaming_sasl_username = "yourtenancyname/oracleidentitycloudservice/your.user@example.com/<STREAM_POOL_OCID>"
 
 splunk_hec_url   = "https://splunk.example.com:8088/services/collector/event"
 splunk_hec_index = "main"
 
 generate_local_kafka_artifacts = true
 create_kafka_connect_internal_streams = false
+
+# SOC4Kafka options used when stream_consumer_model = "soc4kafka"
+soc4kafka_collector_version = "0.154.1"
+soc4kafka_group_id          = "oci-splunk-soc4kafka"
+soc4kafka_encoding          = "text"
+soc4kafka_source            = "oci-streaming"
+soc4kafka_sourcetype        = "oci:log"
 
 # Existing Splunk mode
 # use_existing_splunk    = true
@@ -49,5 +62,5 @@ create_kafka_connect_internal_streams = false
 # Optional Functions path
 enable_functions_path              = false
 create_logs_to_functions_connector = false
-# existing_function_id             = "ocid1.fnfunc.oc1..replace"
+# existing_function_id             = "<FUNCTION_OCID>"
 # function_image                   = "<region-key>.ocir.io/<tenancy>/<repo>/<image>:tag"

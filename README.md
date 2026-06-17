@@ -8,9 +8,11 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 ## What gets deployed
 
 - OCI Logging -> Service Connector -> OCI Streaming stream (Kafka compatibility)
-- Kafka Connect worker configuration + Splunk sink connector config
-- Optional managed Splunk VM bootstrap (Splunk + HEC + Kafka Connect worker auto-configured)
-- Connector defaults tuned for stability (`splunk.hec.ack.enabled=false`, bounded outstanding events, JVM heap options)
+- One stream consumer runtime:
+  - `legacy_kafka_connect` (default): Kafka Connect standalone + Splunk sink connector
+  - `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consuming OCI Streaming directly
+- Optional managed Splunk VM bootstrap (Splunk + HEC + selected stream consumer auto-configured)
+- Consumer defaults tuned for stability (`splunk.hec.ack.enabled=false` for legacy, bounded queues for SOC4Kafka)
 - Post-deploy verification (connectivity + HEC ingest test)
 - Optimized stream usage: single OCI stream by default (`create_kafka_connect_internal_streams=false`)
 
@@ -50,7 +52,9 @@ Use existing Splunk and keep OCI logs delivery by pointing connector/HEC to your
 
 For OCI CLI path (`deploy_oci_splunk.sh`):
 
-- `AUTO_CONFIGURE_KAFKA_CONNECT_ON_VM=true` (default) installs Kafka Connect standalone and registers Splunk sink connector automatically on managed Splunk VM.
+- `STREAM_CONSUMER_MODEL=legacy_kafka_connect` keeps the current Kafka Connect standalone behavior.
+- `STREAM_CONSUMER_MODEL=soc4kafka` installs `soc4kafka.service` with Splunk OTel Collector on managed Splunk.
+- SOC4Kafka receives `/services/collector`; legacy Kafka Connect receives the base HEC URI.
 
 - set `USE_EXISTING_SPLUNK=true`
 - set `SPLUNK_HEC_URL`
@@ -104,7 +108,11 @@ Checks include:
 - Splunk Web reachable
 - Splunk HEC health reachable
 - HEC test event ingest (when real token is set)
-- Kafka Connect service active on managed Splunk VM (kafka/both modes)
+- Selected stream consumer service active on managed Splunk VM when SSH key is available
+
+## SOC4Kafka opt-in
+
+SOC4Kafka is compatibility-gated for OCI Streaming: Splunk documents Apache Kafka, Amazon MSK, and Confluent Platform, while OCI Streaming exposes Kafka-compatible consumer/group APIs. Use `STREAM_CONSUMER_MODEL=soc4kafka` or `stream_consumer_model = "soc4kafka"` only when your e2e validation proves OCI Streaming -> SOC4Kafka -> Splunk ingestion in your tenancy.
 
 ## Safe destroy script
 

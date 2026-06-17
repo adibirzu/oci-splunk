@@ -67,6 +67,7 @@ need_cmd curl
 SPLUNK_IP="$(terraform output -raw splunk_instance_public_ip 2>/dev/null || true)"
 SPLUNK_WEB_URL="$(terraform output -raw splunk_web_url 2>/dev/null || true)"
 SPLUNK_HEC_ENDPOINT="$(terraform output -raw splunk_hec_endpoint 2>/dev/null || true)"
+STREAM_CONSUMER_MODEL="$(terraform output -raw stream_consumer_model 2>/dev/null || true)"
 STREAM_ID="$(terraform output -raw stream_id 2>/dev/null || true)"
 STREAM_POOL_ID="$(terraform output -raw stream_pool_id 2>/dev/null || true)"
 SC_OCID="$(terraform output -raw logs_to_stream_connector_id 2>/dev/null || true)"
@@ -80,6 +81,7 @@ fi
 echo
 echo "Post-deploy verification"
 echo "- splunk_ip=${SPLUNK_IP:-n/a}"
+echo "- stream_consumer_model=${STREAM_CONSUMER_MODEL:-legacy_kafka_connect}"
 echo "- stream_id=${STREAM_ID:-n/a}"
 echo "- stream_pool_id=${STREAM_POOL_ID:-n/a}"
 echo "- logs_to_stream_connector_id=${SC_OCID:-n/a}"
@@ -144,6 +146,35 @@ if [[ -n "${SPLUNK_HEC_ENDPOINT}" ]]; then
     fi
   else
     echo "- hec_test_event_ingest=skipped (splunk_hec_token not set to a real token)"
+  fi
+fi
+
+if [[ -n "${SPLUNK_IP}" ]]; then
+  SERVICE_NAME="kafka-connect"
+  if [[ "${STREAM_CONSUMER_MODEL}" == "soc4kafka" ]]; then
+    SERVICE_NAME="soc4kafka"
+  fi
+
+  SSH_PRIVATE_KEY_PATH="${SPLUNK_SSH_PRIVATE_KEY_PATH:-${SSH_PRIVATE_KEY_PATH:-}}"
+  if [[ -n "${SSH_PRIVATE_KEY_PATH}" && -f "${SSH_PRIVATE_KEY_PATH}" ]]; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${SSH_PRIVATE_KEY_PATH}" "opc@${SPLUNK_IP}" \
+      "sudo systemctl is-active ${SERVICE_NAME} >/dev/null"; then
+      echo "- ${SERVICE_NAME}_service=active"
+    else
+      echo "ERROR: ${SERVICE_NAME} service is not active on managed Splunk VM." >&2
+      exit 1
+    fi
+
+    if [[ "${STREAM_CONSUMER_MODEL}" == "soc4kafka" ]]; then
+      if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i "${SSH_PRIVATE_KEY_PATH}" "opc@${SPLUNK_IP}" \
+        "sudo systemctl is-active kafka-connect >/dev/null 2>&1"; then
+        echo "ERROR: kafka-connect service is active in SOC4Kafka mode." >&2
+        exit 1
+      fi
+      echo "- kafka-connect_service=inactive"
+    fi
+  else
+    echo "- ${SERVICE_NAME}_service=skipped (set SPLUNK_SSH_PRIVATE_KEY_PATH to verify systemd service)"
   fi
 fi
 

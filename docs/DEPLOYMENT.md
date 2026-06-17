@@ -55,7 +55,7 @@ Managed Splunk mode:
 - `STREAM_CONSUMER_MODEL=legacy_kafka_connect` (default) installs Kafka Connect standalone and auto-wires the Splunk sink connector to the OCI stream
 - `STREAM_CONSUMER_MODEL=soc4kafka` installs `soc4kafka.service` with Splunk OTel Collector and writes `output/soc4kafka-config.yaml`
 - Kafka Connect gets a base HEC URI; SOC4Kafka gets `/services/collector`
-- SOC4Kafka is compatibility-gated for OCI Streaming and should be promoted only after end-to-end ingestion succeeds in your tenancy
+- SOC4Kafka is validated end-to-end on OCI Streaming (OCI Stream -> SOC4Kafka -> Splunk HEC). It requires `protocol_version: "1.0.0"` and the stream pool's `endpoint-fqdn` as bootstrap (both handled by the Terraform templates); see SOC4Kafka troubleshooting below and `KB.md`
 
 Destroy only resources created by deploy script:
 
@@ -121,22 +121,31 @@ screenshots. Crop or mask identifiers before adding OCI Console images.
 
 ## SOC4Kafka troubleshooting
 
-If Kafka producers or SOC4Kafka fail with `KafkaTimeoutError: Failed to update
-metadata`, `EOF` during metadata load, or no events appear in Splunk:
+If the collector keeps logging `metadata update triggered` / `max version 5 below
+the user defined min of 7`, never joins the consumer group, or no events appear in
+Splunk:
 
-1. Confirm `stream_name` exists and is `ACTIVE` in the target compartment. A stale
-   `existing_stream_id` can leave Terraform outputs pointing at a deleted stream.
-2. Confirm the Service Connector target stream is the same active stream.
-3. Use `streaming.<region>.oci.oraclecloud.com:9092` as the Kafka bootstrap host.
-4. Build the SASL username from the same OCI user that owns the auth token:
-   `<tenancy-name>/<full-oci-user-name>/<stream-pool-ocid>`. Identity Domain users
-   usually need the domain-qualified user name, for example
-   `oracleidentitycloudservice/user@example.com`.
-5. Publish a unique marker to the stream and search Splunk for that exact marker.
+1. **Protocol version** — the receiver must set `protocol_version: "1.0.0"`. OCI
+   Streaming only supports the Kafka 1.0 protocol (Metadata v5 / Fetch v6); franz-go
+   otherwise demands v7 and loops forever. (KB-001)
+2. **Bootstrap host** — use the stream pool's own endpoint, not the generic regional
+   one: `cell-N.streaming.<region>.oci.oraclecloud.com:9092` (from
+   `oci streaming admin stream-pool get … --query 'data."endpoint-fqdn"'`). The generic
+   endpoint lacks the group coordinator and the consumer hangs. Terraform derives this
+   automatically. (KB-002)
+3. **Exporter flush** — `splunk_hec.sending_queue.batch` needs `flush_timeout` (e.g.
+   `5s`); otherwise low volume waits for `min_size` items and never reaches HEC. (KB-003)
+4. **SASL username** — `<tenancy-name>/<full-oci-user-name>/<stream-pool-ocid>`, with an
+   OCI auth token for that user as the password. Identity Domain users may need the
+   domain-qualified name (e.g. `oracleidentitycloudservice/user@example.com`); Default
+   domain users use the bare user name.
+5. Confirm `stream_name` exists and is `ACTIVE`, and that the Service Connector target
+   stream matches.
+6. Publish a unique marker to the stream and search Splunk for that exact marker.
 
-The live validation for this deployment used the active `Logs2Splunk` stream,
-updated the Service Connector target to that stream, restarted `soc4kafka.service`,
-published a Kafka marker, and found the marker in Splunk.
+The live validation deployed a fresh stack in a test tenancy, published a marker to
+the stream, and found it in Splunk as `index=main` / `sourcetype=oci:log` with no
+manual intervention.
 
 ## Splunk user management
 

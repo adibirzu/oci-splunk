@@ -110,9 +110,27 @@ Checks include:
 - HEC test event ingest (when real token is set)
 - Selected stream consumer service active on managed Splunk VM when SSH key is available
 
-## SOC4Kafka opt-in
+## SOC4Kafka on OCI Streaming
 
-SOC4Kafka is compatibility-gated for OCI Streaming: Splunk documents Apache Kafka, Amazon MSK, and Confluent Platform, while OCI Streaming exposes Kafka-compatible consumer/group APIs. Use `STREAM_CONSUMER_MODEL=soc4kafka` or `stream_consumer_model = "soc4kafka"` only when your e2e validation proves OCI Streaming -> SOC4Kafka -> Splunk ingestion in your tenancy.
+SOC4Kafka (Splunk OTel Collector) was validated end-to-end against OCI Streaming
+(OCI Stream -> SOC4Kafka -> Splunk HEC, indexed as `index=main` /
+`sourcetype=oci:log`). Enable it with `STREAM_CONSUMER_MODEL=soc4kafka` or
+`stream_consumer_model = "soc4kafka"`.
+
+OCI Streaming exposes only the **Kafka 1.0** protocol, so the consumer needs
+specific settings. These are now baked into the Terraform templates, but note
+them if you customize the config:
+
+| Requirement | Why |
+|-------------|-----|
+| `protocol_version: "1.0.0"` on the kafka receiver | OCI Streaming caps Metadata at v5 / Fetch at v6. The franz-go client otherwise demands v7+ and loops on `max version 5 below the user defined min of 7`, never joining the consumer group. |
+| Bootstrap = stream pool `endpoint-fqdn` (`cell-N.streaming.<region>.oci.oraclecloud.com:9092`) | The generic regional endpoint answers metadata but does not host the pool's group coordinator, so the consumer hangs. Terraform derives this automatically via `data.oci_streaming_stream_pool`. |
+| `splunk_hec` exporter `sending_queue.batch.flush_timeout: 5s` | Without it the exporter waits for `min_size: 1000` items and low/idle volume never reaches HEC. |
+| HEC token written directly to `inputs.conf` in cloud-init | The Splunk 10.x `http-event-collector` CLI is unreliable on first boot; writing the stanza declaratively avoids it. |
+
+SASL is PLAIN over TLS; the username is `<tenancy_name>/<user_name>/<stream_pool_OCID>`
+and the password is an OCI auth token for that user. See `KB.md` (KB-001..004) for
+the failure modes behind each requirement.
 
 ## Safe destroy script
 

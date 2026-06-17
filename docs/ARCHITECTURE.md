@@ -11,8 +11,8 @@
 ## Consumer models
 
 - `legacy_kafka_connect` (default): Kafka Connect standalone consumes OCI Streaming through the Kafka compatibility endpoint, then the Splunk Sink Connector posts to the base HEC URI.
-- `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consumes OCI Streaming through the Kafka compatibility endpoint, then the `splunk_hec` exporter posts to `/services/collector`.
-- OCI Streaming + SOC4Kafka is compatibility-gated. Splunk lists Apache Kafka, Amazon MSK, and Confluent Platform for SOC4Kafka; OCI Streaming supports the Kafka consumer/group APIs this project uses.
+- `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consumes OCI Streaming through the Kafka compatibility endpoint, then the `splunk_hec` exporter posts to `/services/collector`. Validated end-to-end (OCI Stream -> SOC4Kafka -> HEC, `index=main` / `sourcetype=oci:log`).
+- OCI Streaming speaks the **Kafka 1.0** protocol only (Metadata API v5, Fetch API v6). The SOC4Kafka collector must therefore set `protocol_version: "1.0.0"` on the kafka receiver, and use the stream pool's own `endpoint-fqdn` (`cell-N.streaming.<region>.oci.oraclecloud.com:9092`) as the bootstrap server so it reaches the pool's group coordinator. Both are handled by the Terraform templates. See `KB.md` (KB-001/KB-002).
 
 ## Existing Splunk mode
 

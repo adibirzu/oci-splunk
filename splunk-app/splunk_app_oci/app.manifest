@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "2.0.0",
+  "info": {
+    "title": "Oracle Cloud App for Splunk",
+    "id": {
+      "group": null,
+      "name": "splunk_app_oci",
+      "version": "2.1.4"
+    },
+    "author": [
+      {
+        "name": "Vivian Richards (adapted for the oci-splunk project)",
+        "email": null,
+        "company": null
+      }
+    ],
+    "releaseDate": "2026-06-18",
+    "description": "OCI dashboards (Audit and VCN flow logs) for logs ingested by the oci-splunk project via SOC4Kafka into index=main, sourcetype=oci:log. Adapted from the original Oracle Cloud App for Splunk; not affiliated with Oracle or Splunk.",
+    "classification": {
+      "intendedAudience": "IT and Security teams running OCI",
+      "categories": [
+        "Security, Fraud & Compliance",
+        "IT Operations"
+      ],
+      "developmentStatus": "Production/Stable"
+    },
+    "commonInformationModels": null,
+    "license": {
+      "name": null,
+      "text": "./README.md",
+      "uri": null
+    },
+    "privacyPolicy": {
+      "name": null,
+      "text": null,
+      "uri": null
+    },
+    "releaseNotes": {
+      "name": null,
+      "text": "./README.md",
+      "uri": null
+    }
+  },
+  "dependencies": null,
+  "tasks": null,
+  "inputGroups": null,
+  "incompatibleApps": null,
+  "platformRequirements": null,
+  "supportedDeployments": [
+    "_standalone",
+    "_distributed",
+    "_search_head_clustering"
+  ],
+  "targetWorkloads": [
+    "_search_heads"
+  ]
+}

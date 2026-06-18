@@ -32,3 +32,6 @@ functions/
 # Local-only blog drafts (never published)
 drafts/
 *.draft.md
+
+# Splunk app build artifacts
+splunk-app/dist/

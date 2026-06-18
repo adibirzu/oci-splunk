@@ -36,3 +36,23 @@ $SPLUNK_HOME/bin/splunk restart
 
 Then open **Oracle Cloud App for Splunk → Security → OCI Audit** and
 **Networking → VCN Flow Logs - Overview (OOTB)**.
+
+## Build a Splunkbase package (.spl)
+
+The app ships in Splunkbase format — `app.manifest`, icons (`static/appIcon*.png`),
+`metadata/default.meta`, and an in-app `README.md`. Build a distributable `.spl`:
+
+```bash
+cd splunk-app
+./build.sh                 # -> dist/splunk_app_oci-<version>.spl
+```
+
+Before submitting to Splunkbase, validate with AppInspect:
+
+```bash
+pip install splunk-appinspect
+splunk-appinspect inspect dist/splunk_app_oci-<version>.spl --mode precert
+```
+
+Install the `.spl` directly: Splunk Web → *Apps → Install app from file*, or
+`$SPLUNK_HOME/bin/splunk install app dist/splunk_app_oci-<version>.spl`.

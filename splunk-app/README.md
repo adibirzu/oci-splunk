@@ -25,14 +25,36 @@ reviewing the original app's license and terms before using or redistributing it
 
 ## Install
 
-Automatically installed on the managed Splunk VM by cloud-init on first deploy.
-To install manually on any Splunk:
+On the **managed Splunk VM** it's installed automatically by cloud-init on first
+deploy. For a **standalone Splunk** (or any instance), install it manually one of
+three ways:
+
+**A. Download the packaged `.spl` and install via Splunk Web (easiest)**
+
+Download [`releases/splunk_app_oci-2.1.4.spl`](releases/splunk_app_oci-2.1.4.spl)
+(verify with [`.sha256`](releases/splunk_app_oci-2.1.4.spl.sha256)), then in Splunk:
+*Apps → Manage Apps → Install app from file → choose the `.spl` → Upload*, and
+restart when prompted.
+
+**B. Install the `.spl` from the CLI**
+
+```bash
+$SPLUNK_HOME/bin/splunk install app splunk_app_oci-2.1.4.spl -update 1
+$SPLUNK_HOME/bin/splunk restart
+```
+
+**C. Copy the source directory**
 
 ```bash
 cp -r splunk_app_oci "$SPLUNK_HOME/etc/apps/"
 chown -R splunk:splunk "$SPLUNK_HOME/etc/apps/splunk_app_oci"
 $SPLUNK_HOME/bin/splunk restart
 ```
+
+> Requirement for all paths: your OCI logs must be indexed as
+> `sourcetype=oci:log` (what this project's SOC4Kafka exporter does). On a
+> standalone instance not fed by this project, point your own ingest at that
+> sourcetype, or change the `oci_index` macro to match your index/sourcetype.
 
 Then open **Oracle Cloud App for Splunk → Security → OCI Audit** and
 **Networking → VCN Flow Logs - Overview (OOTB)**.

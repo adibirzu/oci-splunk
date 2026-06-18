@@ -19,7 +19,7 @@
       <single>
         <title>Total flows</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
+          <query>`oci_vcn_logs` `oci_trim` | search (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -29,7 +29,7 @@
       <single>
         <title>Rejected flows</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
+          <query>`oci_vcn_logs` `oci_trim` | search action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -43,7 +43,7 @@
       <single>
         <title>Distinct source addresses</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats dc(sourceAddress)</query>
+          <query>`oci_vcn_logs` `oci_trim` | search (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats dc(sourceAddress)</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -55,7 +55,7 @@
       <chart>
         <title>Accepted vs rejected over time</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | timechart count by action</query>
+          <query>`oci_vcn_logs` `oci_trim` | search (sourceAddress="$addr$" OR destinationAddress="$addr$") | timechart count by action</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -69,7 +69,7 @@
       <chart>
         <title>Top rejected source addresses</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 sourceAddress</query>
+          <query>`oci_vcn_logs` `oci_trim` | search action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 sourceAddress</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -80,7 +80,7 @@
       <chart>
         <title>Top destination ports</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 destinationPort</query>
+          <query>`oci_vcn_logs` `oci_trim` | search (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 destinationPort</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>
@@ -93,7 +93,7 @@
       <table>
         <title>Recent flows</title>
         <search>
-          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | table _time action sourceAddress sourcePort destinationAddress destinationPort protocolName bytesOut packets | sort - _time</query>
+          <query>`oci_vcn_logs` `oci_trim` | search (sourceAddress="$addr$" OR destinationAddress="$addr$") | table _time action sourceAddress sourcePort destinationAddress destinationPort protocolName bytesOut packets | sort - _time</query>
           <earliest>$tr.earliest$</earliest>
           <latest>$tr.latest$</latest>
         </search>

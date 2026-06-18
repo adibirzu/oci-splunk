@@ -11,6 +11,12 @@ with or supported by Oracle or Splunk.** Provided as-is. Review the original
 app's license before redistributing. You are responsible for maintaining this
 copy and complying with all applicable terms.
 
+## Release notes — 2.1.5
+
+- Fixed the **VCN Flow Logs - Overview (OOTB)** dashboard: address/action filters
+  now use an explicit `| search` after the `oci_trim` macro (previously they were
+  parsed as arguments to `oci_trim`'s trailing `fields` command).
+
 ## Release notes — 2.1.4
 
 - `oci_index` base macro now targets `index=main sourcetype="oci:log"` (this

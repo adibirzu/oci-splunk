@@ -31,15 +31,15 @@ three ways:
 
 **A. Download the packaged `.spl` and install via Splunk Web (easiest)**
 
-Download [`releases/splunk_app_oci-2.1.4.spl`](releases/splunk_app_oci-2.1.4.spl)
-(verify with [`.sha256`](releases/splunk_app_oci-2.1.4.spl.sha256)), then in Splunk:
+Download [`releases/splunk_app_oci-2.1.5.spl`](releases/splunk_app_oci-2.1.5.spl)
+(verify with [`.sha256`](releases/splunk_app_oci-2.1.5.spl.sha256)), then in Splunk:
 *Apps → Manage Apps → Install app from file → choose the `.spl` → Upload*, and
 restart when prompted.
 
 **B. Install the `.spl` from the CLI**
 
 ```bash
-$SPLUNK_HOME/bin/splunk install app splunk_app_oci-2.1.4.spl -update 1
+$SPLUNK_HOME/bin/splunk install app splunk_app_oci-2.1.5.spl -update 1
 $SPLUNK_HOME/bin/splunk restart
 ```
 

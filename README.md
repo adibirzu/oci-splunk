@@ -257,6 +257,31 @@ the failure modes behind each requirement.
 ./destroy_oci_splunk.sh
 ```
 
+## Splunk app (dashboards, alerts, CIM)
+
+A bundled Splunk app — [`splunk-app/`](splunk-app/) — turns the raw `oci:log`
+events into dashboards with zero field wrangling. It's pre-wired to
+`index=main sourcetype="oci:log"` and auto-installed on the managed Splunk VM;
+for a standalone Splunk, download
+[`splunk-app/releases/`](splunk-app/releases/) and *Apps → Install app from file*.
+
+- **Dashboards**
+  - **OCI Overview** — audit, network, and object storage at a glance (default view)
+  - **Security** — OCI Audit Overview, OCI Audit Activity, CloudGuard detections
+  - **Networking** — VCN Flow Logs Overview (OOTB), Security Analysis, Traffic
+    Analysis (all read raw events — no summary index needed)
+  - **Developer Services** — Object Storage activity, Function logs, Load Balancers
+- **Filters populate from live data** (tenant / compartment / log source), no
+  scheduled lookup population required.
+- **Out-of-the-box alerts** (scheduled, tracked): VCN rejected-traffic spike,
+  audit failures, IAM/policy changes, new external source IP to object storage.
+- **CIM** — VCN flow logs are tagged for the **Network Traffic** data model with
+  normalized `src`/`dest`/`src_port`/`dest_port`/`action`/`bytes`/`transport`;
+  audit and object-storage events tagged for change/audit. Usable with Splunk ES.
+
+Build/package details and manual-install paths are in
+[`splunk-app/README.md`](splunk-app/README.md).
+
 ## Environment files
 
 - Use `.env.local` (preferred) for local deployment variables

@@ -26,9 +26,9 @@ variable "auth" {
 }
 
 variable "oci_profile" {
-  description = "OCI CLI profile name used for local deployments."
+  description = "OCI CLI profile for local deployments. Leave empty in OCI Resource Manager (ORM), which authenticates automatically."
   type        = string
-  default     = "DEFAULT"
+  default     = ""
 }
 
 variable "oci_config_file" {
@@ -160,7 +160,7 @@ variable "allowed_ingress_cidr" {
 variable "splunk_shape" {
   description = "Compute shape for Splunk VM."
   type        = string
-  default     = "VM.Standard.E4.Flex"
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "splunk_ocpus" {
@@ -243,19 +243,21 @@ variable "existing_stream_id" {
 }
 
 variable "log_group_ocid" {
-  description = "OCI Logging log group OCID for service connector source."
+  description = "OCI Logging log group OCID for the optional custom-log service connector source. Leave empty unless create_logs_to_stream_connector=true."
   type        = string
+  default     = ""
 }
 
 variable "log_ocid" {
-  description = "OCI Logging log OCID for service connector source."
+  description = "OCI Logging log OCID for the optional custom-log service connector source. Leave empty unless create_logs_to_stream_connector=true."
   type        = string
+  default     = ""
 }
 
 variable "create_logs_to_stream_connector" {
-  description = "Create Service Connector from a specific Logging log to Streaming (requires log_group_ocid/log_ocid)."
+  description = "Create a Service Connector from a specific custom Logging log to Streaming (requires log_group_ocid/log_ocid). Off by default; the Audit connector ships logs out of the box instead."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "create_audit_stream_connector" {

@@ -1,13 +1,13 @@
 locals {
-  create_network             = !var.use_existing_network
-  create_managed_splunk      = !var.use_existing_splunk
-  create_stream_pool         = var.existing_stream_pool_id == ""
-  create_stream              = var.existing_stream_id == ""
-  use_existing_lb            = var.existing_load_balancer_id != ""
-  effective_vcn_id           = local.create_network ? oci_core_vcn.splunk[0].id : var.existing_vcn_id
-  effective_subnet_id        = local.create_network ? oci_core_subnet.splunk[0].id : var.existing_subnet_id
-  effective_stream_pool_id   = local.create_stream_pool ? oci_streaming_stream_pool.splunk[0].id : var.existing_stream_pool_id
-  effective_stream_id        = local.create_stream ? oci_streaming_stream.splunk[0].id : var.existing_stream_id
+  create_network           = !var.use_existing_network
+  create_managed_splunk    = !var.use_existing_splunk
+  create_stream_pool       = var.existing_stream_pool_id == ""
+  create_stream            = var.existing_stream_id == ""
+  use_existing_lb          = var.existing_load_balancer_id != ""
+  effective_vcn_id         = local.create_network ? oci_core_vcn.splunk[0].id : var.existing_vcn_id
+  effective_subnet_id      = local.create_network ? oci_core_subnet.splunk[0].id : var.existing_subnet_id
+  effective_stream_pool_id = local.create_stream_pool ? oci_streaming_stream_pool.splunk[0].id : var.existing_stream_pool_id
+  effective_stream_id      = local.create_stream ? oci_streaming_stream.splunk[0].id : var.existing_stream_id
   # The stream pool's own endpoint FQDN (cell-N.streaming.<region>...) hosts the
   # group coordinator. The generic regional endpoint answers metadata but not
   # consumer-group coordination, so a SOC4Kafka consumer hangs on it. Prefer the
@@ -34,9 +34,13 @@ locals {
 }
 
 provider "oci" {
-  region              = var.region
-  auth                = local.oci_auth
-  config_file_profile = contains(["APIKey", "SecurityToken"], local.oci_auth) ? var.oci_profile : null
+  region = var.region
+  # Local: an OCI CLI profile (API key / session token) drives auth.
+  # ORM/auto: with no profile set, leave auth unset so Resource Manager's
+  # injected credentials (or the default chain) are used — ORM authenticates
+  # automatically. Instance/Resource principals are honored even without a profile.
+  auth                = (var.oci_profile != "" || contains(["InstancePrincipal", "ResourcePrincipal"], local.oci_auth)) ? local.oci_auth : null
+  config_file_profile = (var.oci_profile != "" && contains(["APIKey", "SecurityToken"], local.oci_auth)) ? var.oci_profile : null
   tenancy_ocid        = var.tenancy_ocid != "" ? var.tenancy_ocid : null
   user_ocid           = var.user_ocid != "" ? var.user_ocid : null
   fingerprint         = var.fingerprint != "" ? var.fingerprint : null
@@ -320,7 +324,7 @@ resource "oci_core_instance" "splunk" {
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
-    user_data           = base64encode(templatefile("${path.module}/templates/splunk-cloud-init.tftpl", {
+    user_data = base64encode(templatefile("${path.module}/templates/splunk-cloud-init.tftpl", {
       splunk_admin_password_b64  = base64encode(var.splunk_admin_password)
       splunk_hec_token_b64       = base64encode(var.splunk_hec_token)
       splunk_hec_index           = var.splunk_hec_index

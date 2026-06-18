@@ -1,7 +1,7 @@
 title: OCI Logs to Splunk
 description: Deploy OCI Logging to OCI Streaming and forward events to Splunk with Kafka Connect or SOC4Kafka.
 schemaVersion: 1.1.0
-version: "20260616"
+version: "20260618"
 locale: en
 
 variableGroups:
@@ -12,12 +12,18 @@ variableGroups:
       - allowed_ingress_cidr
       - ssh_public_key
       - splunk_admin_password
-      - log_group_ocid
-      - log_ocid
       - streaming_tenancy_name
       - streaming_user_name
       - streaming_auth_token
       - splunk_hec_token
+  - title: Logs shipped out of the box
+    variables:
+      - create_audit_stream_connector
+      - create_vcn_flow_logs
+      - manage_service_connector_policy
+      - audit_log_compartment_ocid
+      - log_group_ocid
+      - log_ocid
   - title: Stream Consumer
     variables:
       - stream_consumer_model
@@ -91,14 +97,36 @@ variables:
     title: Splunk admin password
     type: password
     required: true
+  create_audit_stream_connector:
+    title: Ship OCI Audit logs out of the box
+    type: boolean
+    default: true
+    description: Create a Service Connector that forwards the compartment's _Audit logs to the stream.
+  create_vcn_flow_logs:
+    title: Enable and ship VCN flow logs
+    type: boolean
+    default: true
+    description: Enable flow logs on the created subnet and add them to the connector (only when this stack creates the network).
+  manage_service_connector_policy:
+    title: Create Service Connector IAM policy
+    type: boolean
+    default: true
+    description: Create the IAM policy letting the Service Connector read logs and push to the stream. Disable if your tenancy already has it or is at its policy-statement limit.
+  audit_log_compartment_ocid:
+    title: Audit log compartment OCID (optional)
+    type: string
+    required: false
+    description: Compartment whose Audit logs are shipped. Empty = the deployment compartment.
   log_group_ocid:
-    title: Log group OCID
+    title: Custom log group OCID (optional)
     type: string
-    required: true
+    required: false
+    description: Only needed if you enable the custom-log connector (create_logs_to_stream_connector).
   log_ocid:
-    title: Log OCID
+    title: Custom log OCID (optional)
     type: string
-    required: true
+    required: false
+    description: Only needed if you enable the custom-log connector (create_logs_to_stream_connector).
   stream_consumer_model:
     title: Stream consumer model
     type: enum
@@ -174,7 +202,7 @@ variables:
   splunk_shape:
     title: Splunk compute shape
     type: oci:core:instanceshape:name
-    default: VM.Standard.E4.Flex
+    default: VM.Standard.E5.Flex
   splunk_ocpus:
     title: Splunk OCPUs
     type: number

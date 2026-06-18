@@ -5,6 +5,25 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 - Managed Splunk on OCI compute (created by this project)
 - Existing Splunk instance (you provide HEC endpoint/token)
 
+## Deploy as an OCI Resource Manager stack
+
+[![Deploy to Oracle Cloud](https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/adibirzu/oci-splunk/archive/refs/heads/main.zip)
+
+One-click into OCI Resource Manager (ORM). After clicking:
+
+1. Accept the Terraform config; when prompted, set **Working directory** to
+   `oci-splunk-main/terraform` (the stack form lists directories that contain
+   `.tf` files — pick that one).
+2. ORM **authenticates automatically** as the launching user — leave the OCI
+   profile blank (the provider skips `config_file_profile` when none is set).
+3. Fill the form (compartment, region, ingress CIDR, SSH key, Splunk admin
+   password, HEC token, and — for SOC4Kafka — the streaming user + auth token),
+   then **Plan** and **Apply**. The variable form is generated from
+   [`terraform/schema.yaml`](terraform/schema.yaml).
+
+> The button always tracks `main`. For a pinned version, point `zipUrl` at a
+> tag/release archive instead.
+
 > [!IMPORTANT]
 > **Independent project — not affiliated with, endorsed by, or supported by Oracle.**
 > It is provided **as-is, with no warranty and no official support**. You are

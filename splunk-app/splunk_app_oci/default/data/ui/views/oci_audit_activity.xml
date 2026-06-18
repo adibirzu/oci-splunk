@@ -1,9 +1,11 @@
 <form version="1.1" script="base_page.js" theme="dark">
   <label>OCI Audit Activity</label>
   <search id="list_types">
-    <query>
-        |inputlookup oci_services.csv
-    </query>
+    <!-- Populate filter dropdowns from live data instead of the (empty until
+         scheduled) oci_services lookup, so filters work out of the box. -->
+    <query><![CDATA[ `oci_index` oracle.loggroupid=_audit `oci_trim` | stats count by tenantid tenant_shortname compartmentName type_source ]]></query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
   </search>
   <search id="type_statistics">
     <query>

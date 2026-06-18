@@ -10,6 +10,12 @@ access = read : [ * ], write : [ admin, power ]
 export = system
 
 
+### TAGS (CIM: Network Traffic / Change / Audit)
+
+[tags]
+export = system
+
+
 ### PROPS
 
 [props]

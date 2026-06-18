@@ -1,9 +1,8 @@
 <form version="1.1" theme="dark">
   <label>OCI Audit Overview</label>
   <search id="list_types">
-    <query>
-        |inputlookup oci_services.csv
-    </query>
+    <!-- Populate filter dropdowns from live data (lookup is empty until scheduled). -->
+    <query><![CDATA[ `oci_index` earliest=-7d `oci_trim` | stats count by tenantid tenant_shortname compartmentName type_source ]]></query>
   </search>
   <search id="type_statistics">
     <query>

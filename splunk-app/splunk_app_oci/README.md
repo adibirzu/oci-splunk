@@ -11,6 +11,21 @@ with or supported by Oracle or Splunk.** Provided as-is. Review the original
 app's license before redistributing. You are responsible for maintaining this
 copy and complying with all applicable terms.
 
+## Release notes — 2.2.0
+
+- **Live filter dropdowns** — Tenant/Compartment/Log-source filters on the audit,
+  cloudguard, and object-storage dashboards now populate from live data instead of
+  the (initially empty) `oci_services` lookup.
+- **VCN Security & Traffic Analysis dashboards** rewritten to read raw events (no
+  summary index needed) — rejected-traffic focus and volume/talkers focus.
+- **OCI Overview** landing dashboard (audit + network + object storage at a glance),
+  set as the app's default view.
+- **Out-of-the-box alerts** (scheduled, tracked): VCN rejected-traffic spike, audit
+  failures, IAM/policy changes, new external source IP to object storage.
+- **CIM mapping** — `eventtypes.conf` + `tags.conf` tag VCN flow logs for the
+  Network Traffic model (with `src`/`dest`/`ports`/`action`/`bytes`/`transport`
+  field normalization); audit/object-storage tagged for change/audit.
+
 ## Release notes — 2.1.5
 
 - Fixed the **VCN Flow Logs - Overview (OOTB)** dashboard: address/action filters

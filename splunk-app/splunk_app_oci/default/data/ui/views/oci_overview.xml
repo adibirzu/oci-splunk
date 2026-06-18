@@ -1,0 +1,108 @@
+<form version="1.1" theme="dark">
+  <label>OCI Overview</label>
+  <description>Audit, network, and object storage at a glance — straight from raw oci:log events.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="tr">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Total OCI events</title>
+        <search>
+          <query>`oci_index` | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Audit events</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>VCN flows</title>
+        <search>
+          <query>`oci_vcn_logs` | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>VCN rejected</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` | search action=REJECT | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0x53a051","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Object storage ops</title>
+        <search>
+          <query>`oci_index` `oci_trim` | search type_source=objectstorage | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Events over time by OCI service</title>
+        <search>
+          <query>`oci_index` `oci_trim` | timechart count by type_source useother=t limit=8</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Top audit event types</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit `oci_trim` | top limit=10 type_shortname</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>VCN accepted vs rejected</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` | timechart count by action</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+      </chart>
+    </panel>
+  </row>
+</form>

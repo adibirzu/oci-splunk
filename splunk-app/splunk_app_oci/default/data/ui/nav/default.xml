@@ -1,5 +1,7 @@
 <nav search_view="search" color="#FA0000">
 
+    <view name="oci_overview" default="true"/>
+
     <collection label="Security">
       <view name="oci_audit_overview"/>
       <view name="oci_audit_activity"/>
@@ -7,7 +9,7 @@
     </collection>
 
     <collection label="Networking">
-      <view name="oci_vcn_flow_overview" default="true"/>
+      <view name="oci_vcn_flow_overview"/>
       <view name="vcn_flow_logs__traffic_analysis"/>
       <view name="vcn_flow_logs__security_analysis"/>
         <divider />

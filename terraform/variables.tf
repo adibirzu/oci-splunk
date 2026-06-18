@@ -253,7 +253,25 @@ variable "log_ocid" {
 }
 
 variable "create_logs_to_stream_connector" {
-  description = "Create Service Connector from Logging to Streaming."
+  description = "Create Service Connector from a specific Logging log to Streaming (requires log_group_ocid/log_ocid)."
+  type        = bool
+  default     = true
+}
+
+variable "create_audit_stream_connector" {
+  description = "On first deploy, create a Service Connector that ships OCI Audit logs (_Audit) to the stream so logs flow out of the box."
+  type        = bool
+  default     = true
+}
+
+variable "audit_log_compartment_ocid" {
+  description = "Compartment whose Audit logs are shipped. Empty = the deployment compartment (compartment_ocid)."
+  type        = string
+  default     = ""
+}
+
+variable "manage_service_connector_policy" {
+  description = "Create the IAM policy granting the Service Connector principal stream-push + read log-content (needed for the Audit connector to move data)."
   type        = bool
   default     = true
 }

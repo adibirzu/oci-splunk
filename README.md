@@ -16,6 +16,12 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
 ## What gets deployed
 
 - OCI Logging -> Service Connector -> OCI Streaming stream (Kafka compatibility)
+- **OCI Audit logs shipped out of the box** — on first deploy a Service Connector
+  forwards the `_Audit` logs of the deployment compartment to the stream
+  (`create_audit_stream_connector = true`), so events flow without extra setup.
+  A matching IAM policy is created automatically (`manage_service_connector_policy`;
+  set it to `false` if your tenancy already has a `serviceconnector` policy or is
+  at its policy-statement limit).
 - One stream consumer runtime:
   - `legacy_kafka_connect` (default): Kafka Connect standalone + Splunk sink connector
   - `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consuming OCI Streaming directly

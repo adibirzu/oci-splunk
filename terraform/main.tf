@@ -30,6 +30,7 @@ locals {
   legacy_kafka_connect_model = var.stream_consumer_model == "legacy_kafka_connect"
   soc4kafka_model            = var.stream_consumer_model == "soc4kafka"
   oci_auth                   = var.auth == "ApiKey" ? "APIKey" : var.auth
+  audit_compartment          = var.audit_log_compartment_ocid != "" ? var.audit_log_compartment_ocid : var.compartment_ocid
 }
 
 provider "oci" {
@@ -530,6 +531,41 @@ resource "oci_functions_function" "splunk" {
 
 locals {
   effective_function_id = var.enable_functions_path ? (var.existing_function_id != "" ? var.existing_function_id : try(oci_functions_function.splunk[0].id, "")) : ""
+}
+
+resource "oci_sch_service_connector" "audit_to_stream" {
+  count          = var.create_audit_stream_connector ? 1 : 0
+  compartment_id = var.compartment_ocid
+  display_name   = "${var.project_prefix}-audit-to-stream"
+
+  source {
+    kind = "logging"
+    log_sources {
+      compartment_id = local.audit_compartment
+      log_group_id   = "_Audit"
+    }
+  }
+
+  target {
+    kind      = "streaming"
+    stream_id = local.effective_stream_id
+  }
+
+  depends_on = [oci_identity_policy.service_connector]
+}
+
+# Service Connector Hub moves data as the 'serviceconnector' principal, which
+# needs explicit permission to read the source logs and push to the stream.
+resource "oci_identity_policy" "service_connector" {
+  count          = var.create_audit_stream_connector && var.manage_service_connector_policy ? 1 : 0
+  compartment_id = var.compartment_ocid
+  name           = "${var.project_prefix}-service-connector"
+  description    = "Allow Service Connector Hub to read logs and push to the OCI Splunk stream"
+
+  statements = [
+    "Allow any-user to use stream-push in compartment id ${var.compartment_ocid} where all {request.principal.type='serviceconnector', request.principal.compartment.id='${var.compartment_ocid}'}",
+    "Allow any-user to read log-content in compartment id ${local.audit_compartment} where all {request.principal.type='serviceconnector', request.principal.compartment.id='${var.compartment_ocid}'}",
+  ]
 }
 
 resource "oci_sch_service_connector" "logs_to_functions" {

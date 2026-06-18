@@ -9,6 +9,10 @@ receivers:
     # and loops on "max version 5 below the user defined min of 7", never
     # joining the consumer group.
     protocol_version: "1.0.0"
+    # Start from the beginning of the stream on first join so freshly deployed
+    # consumers surface existing (e.g. Audit) events instead of only new ones.
+    # The consumer group commits offsets, so later restarts resume in place.
+    initial_offset: earliest
     logs:
       topics:
         - ${stream_name_json}

@@ -1,0 +1,179 @@
+<form version="1.1" theme="dark">
+  <label>OCI Audit Overview</label>
+  <search id="list_types">
+    <query>
+        |inputlookup oci_services.csv
+    </query>
+  </search>
+  <search id="type_statistics">
+    <query>
+            <![CDATA[
+              `oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | top limit=10 tenantid tenant_shortname compartmentid compartment_shortname compartmentName type type_shortname by message
+            ]]>
+        </query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false">
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search base="list_types">
+        <query>top tenantid tenant_shortname</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentname">
+      <label>Compartment Name</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>compartmentName="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentName</fieldForValue>
+      <fieldForLabel>compartmentName</fieldForLabel>
+      <search base="list_types">
+        <query>top compartmentName | where (compartmentName != "null" AND compartmentName != "NA")</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="type">
+      <label>Audit log source</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>type_source="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>type_source</fieldForValue>
+      <fieldForLabel>type_source</fieldForLabel>
+      <search base="list_types">
+        <query>stats count by type_source </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token" searchWhenChanged="true">
+      <label>Time</label>
+      <default>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Audit Message Categories</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim`
+        | eval log_result=case(message LIKE "%fail%","FAIL",message LIKE "%exception%","EXCEPTION",message LIKE "%create%","CREATE",message LIKE "%update%","UPDATE",message LIKE "%List%","LIST",message like "%delete%","DELETE",message like "%retrieve%","RETRIEVE",message like "%logged%","LOGGED",message LIKE "%succeed%","SUCCESS",1=0,"undefined")
+        | search $tenantid$ $compartmentname$ $type$
+        | stats count by log_result</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="colorBy">trend</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="height">452</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">preview</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trellis.size">large</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="useColors">1</option>
+        <drilldown>
+                    <set token="selected_value">$trellis.value$</set>
+                    <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+
+
+      </single>
+    </panel>
+    <panel>
+      <map>
+        <title>Source Address Location</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim`
+                  | eval log_result=case(message LIKE "%fail%","FAIL",message LIKE "%exception%","EXCEPTION",message LIKE "%create%","CREATE",message LIKE "%update%","UPDATE",message LIKE "%List%","LIST",message like "%delete%","DELETE",message like "%retrieve%","RETRIEVE",message like "%logged%","LOGGED",message LIKE "%succeed%","SUCCESS",1=0,"undefined")
+                  | search $tenantid$ $compartmentname$ $type$
+                  |iplocation identity.ipAddress
+                  | geostats count by log_result</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+
+        <option name="drilldown">all</option>
+        <option name="height">452</option>
+        <option name="mapping.data.maxClusters">1000</option>
+        <option name="mapping.map.center">(38.34,-97.73)</option>
+        <option name="mapping.map.zoom">4</option>
+        <option name="mapping.tileLayer.maxZoom">7</option>
+        <option name="mapping.type">marker</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </map>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+        <style>
+         .facet-label{
+          font-size:20px !important;
+          font-weight: bold !important;
+          }
+        </style>
+      </html>
+      <single>
+        <title>Top 10 messages for $type$</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | search $tenantid$ $compartmentname$ $type$| timechart limit=18 count by type_source usenull=f</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+          <option name="drilldown">all</option>
+          <option name="colorBy">trend</option>
+        <option name="colorMode">block</option>
+        <option name="height">493</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">preview</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+</form>

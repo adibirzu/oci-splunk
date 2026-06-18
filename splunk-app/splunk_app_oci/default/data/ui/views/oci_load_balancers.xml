@@ -1,0 +1,390 @@
+
+<form version="1.1" script="base_page.js" theme="dark">
+  <label>OCI Load Balancer Overview</label>
+  <search id="list_lbs">
+    <query>
+        |inputlookup oci_lbs.csv
+    </query>
+  </search>
+  <search id="lb_statistics">
+    <query>
+            <![CDATA[
+              `oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+              | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+              | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+              | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+              | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+              | stats limit=0 count avg(requestProcessingTime) as avg_requestProcessingTime max(requestProcessingTime) as max_requestProcessingTime
+                  avg(backendConnectTime) as avg_backendConnectTime avg(backendProcessingTime) as backendProcessingTime
+                  sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source backendAddr host lbstatus lbStatusCode backendStatusCode
+              | eval avg_requestProcessingTime=round(avg_requestProcessingTime,3)
+              | eval avg_backendConnectTime=round(avg_backendConnectTime,3)
+              | eval avg_backendProcessingTime=round(avg_backendProcessingTime,3)
+              | eval sum_receivedMBytes=round(sum_receivedMBytes/1024,2)
+              | eval sum_sentMBytes=round(sum_sentMBytes/1024,2)
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false" autoRun="false">
+    <input type="multiselect" token="tenantid">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>oracle.tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search base="list_lbs">
+        <query>top tenantid tenant_shortname</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentid">
+      <label>Compartment ID</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>oracle.compartmentid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentid</fieldForValue>
+      <fieldForLabel>compartment_shortname</fieldForLabel>
+      <search base="list_lbs">
+        <query>top compartmentid compartment_shortname</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="source">
+      <label>Load Balancer Source Name</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>source="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>oci_source</fieldForValue>
+      <fieldForLabel>oci_source</fieldForLabel>
+      <search base="list_lbs">
+        <query>stats count by oci_source</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token" searchWhenChanged="true">
+      <label>Time</label>
+      <default>
+        <earliest>-7d@d</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Total Load Balancers</title>
+        <search base="list_lbs">
+          <query>
+            | eval oracle.tenantid=tenantid
+            | eval oracle.compartmentid=compartmentid
+            | eval source=oci_source
+            | search $tenantid$ $compartmentid$ $source$
+            | stats dc(oci_source)
+          </query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="field">count</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=%7Cinputlookup%20oci_lbs.csv%20%7C%20%20eval%20oracle.tenantid%3Dtenantid%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20oracle.compartmentid%3Dcompartmentid%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20source%3Doci_source%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20search%20$tenantid$%20$compartmentid$%20$source$%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20stats%20dc(oci_source)&amp;earliest=$earliest$&amp;latest=$latest$</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Total Requests</title>
+        <search base="lb_statistics">
+          <query>
+                        <![CDATA[
+                         stats sum(count) as count
+                        ]]>
+                    </query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="field">count</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+            search?q=`oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+              | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+              | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+              | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+              | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+              | stats limit=0 count avg(requestProcessingTime) as avg_requestProcessingTime max(requestProcessingTime) as max_requestProcessingTime
+                  avg(backendConnectTime) as avg_backendConnectTime avg(backendProcessingTime) as backendProcessingTime
+                  sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source backendAddr host lbstatus lbStatusCode backendStatusCode
+              | eval avg_requestProcessingTime=round(avg_requestProcessingTime,3)
+              | eval avg_backendConnectTime=round(avg_backendConnectTime,3)
+              | eval avg_backendProcessingTime=round(avg_backendProcessingTime,3)
+              | eval sum_receivedMBytes=round(sum_receivedMBytes/1024,2)
+              | eval sum_sentMBytes=round(sum_sentMBytes/1024,2) | stats sum(count) as count
+              &earliest=$time_token.earliest$&latest=$time_token.latest$
+              ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>400 Errors</title>
+        <search base="lb_statistics">
+          <query>
+                        <![CDATA[
+                         search lbstatus=400ERROR | stats sum(count) as count
+                        ]]>
+                    </query>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="field">count</option>
+        <option name="rangeColors">["0x53a051","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+            search?q=`oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+              | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+              | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+              | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+              | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+              | stats limit=0 count avg(requestProcessingTime) as avg_requestProcessingTime max(requestProcessingTime) as max_requestProcessingTime
+                  avg(backendConnectTime) as avg_backendConnectTime avg(backendProcessingTime) as backendProcessingTime
+                  sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source backendAddr host lbstatus lbStatusCode backendStatusCode
+              | eval avg_requestProcessingTime=round(avg_requestProcessingTime,3)
+              | eval avg_backendConnectTime=round(avg_backendConnectTime,3)
+              | eval avg_backendProcessingTime=round(avg_backendProcessingTime,3)
+              | eval sum_receivedMBytes=round(sum_receivedMBytes/1024,2)
+              | eval sum_sentMBytes=round(sum_sentMBytes/1024,2) | stats sum(count) as count
+              &earliest=$time_token.earliest$&latest=$time_token.latest$
+              ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>500 Errors</title>
+        <search base="lb_statistics">
+          <query>
+                        <![CDATA[
+                         search lbstatus=500ERROR | stats sum(count) as count
+                        ]]>
+                    </query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="field">count</option>
+        <option name="rangeColors">["0x53a051","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+            search?q=`oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+              | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+              | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+              | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+              | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+              | stats limit=0 count avg(requestProcessingTime) as avg_requestProcessingTime max(requestProcessingTime) as max_requestProcessingTime
+                  avg(backendConnectTime) as avg_backendConnectTime avg(backendProcessingTime) as backendProcessingTime
+                  sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source backendAddr host lbstatus lbStatusCode backendStatusCode
+              | eval avg_requestProcessingTime=round(avg_requestProcessingTime,3)
+              | eval avg_backendConnectTime=round(avg_backendConnectTime,3)
+              | eval avg_backendProcessingTime=round(avg_backendProcessingTime,3)
+              | eval sum_receivedMBytes=round(sum_receivedMBytes/1024,2)
+              | eval sum_sentMBytes=round(sum_sentMBytes/1024,2) | stats sum(count) as count
+              &earliest=$time_token.earliest$&latest=$time_token.latest$
+              ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Data Received</title>
+        <search base="lb_statistics">
+          <query>
+                        <![CDATA[
+                         stats sum(sum_receivedMBytes) as "In"
+                        ]]>
+                    </query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="numberPrecision">0.0</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="unit">MB</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">1</option>
+        <option name="useThousandSeparators">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+            search?q=`oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+              | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+              | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+              | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+              | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+              | stats limit=0 count avg(requestProcessingTime) as avg_requestProcessingTime max(requestProcessingTime) as max_requestProcessingTime
+                  avg(backendConnectTime) as avg_backendConnectTime avg(backendProcessingTime) as backendProcessingTime
+                  sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source backendAddr host lbstatus lbStatusCode backendStatusCode
+              | eval avg_requestProcessingTime=round(avg_requestProcessingTime,3)
+              | eval avg_backendConnectTime=round(avg_backendConnectTime,3)
+              | eval avg_backendProcessingTime=round(avg_backendProcessingTime,3)
+              | eval sum_receivedMBytes=round(sum_receivedMBytes/1024,2)
+              | eval sum_sentMBytes=round(sum_sentMBytes/1024,2) | stats sum(count) as count
+              &earliest=$time_token.earliest$&latest=$time_token.latest$
+              ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Data Serviced</title>
+        <search base="lb_statistics">
+          <query>
+                        <![CDATA[
+                         stats sum(sum_sentMBytes) as "Out"
+                        ]]>
+                    </query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="numberPrecision">0.0</option>
+        <option name="rangeColors">["0x53a051","0x53a051"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="unit">MB</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">1</option>
+        <option name="useThousandSeparators">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+            search?q=search | table *
+            ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Selected Load Balancer(s) Details</title>
+        <search base="list_lbs">
+          <query>
+            | eval oracle.tenantid=tenantid, oracle.compartmentid=compartmentid
+            | search $tenantid$ $compartmentid$ $source$
+            | fields tenant_shortname compartment_shortname oci_source host backendAddr
+            | rename tenant_shortname as tenant compartment_shortname as compartment oci_source as "LB Name" backendAddr as "Backend Address"
+          </query>
+        </search>
+        <option name="count">5</option>
+        <option name="drilldown">row</option>
+        <option name="rowNumbers">true</option>
+        <drilldown>
+          <link target="_blank">search?q=%7Cinputlookup%20oci_lbs.csv%20%7C%20%20eval%20oracle.tenantid%3Dtenantid%2C%20oracle.compartmentid%3Dcompartmentid%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20search%20$tenantid$%20$compartmentid$%20$source$%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20fields%20tenant_shortname%20compartment_shortname%20oci_source%20host%20backendAddr%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20rename%20tenant_shortname%20as%20tenant%20compartment_shortname%20as%20compartment%20oci_source%20as%20%22LB%20Name%22%20backendAddr%20as%20%22Backend%20Address%22&amp;earliest=$earliest$&amp;latest=$latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Load Balancer Errors</title>
+        <search>
+          <query>`oci_index` type=com.oraclecloud.loadbalancer.error `oci_trim` $tenantid$ $compartmentid$ $source$
+| stats count sparkline(count) as trend by tenant_shortname compartment_shortname oci_source errorLog.type errorLog.errorDetails
+| rename tenant_shortname as tenant compartment_shortname as compartment errorLog.type as "error type" errorLog.errorDetails as "Error Details" oci_source as "LB Name"</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">row</option>
+        <option name="rowNumbers">true</option>
+        <format type="color" field="count">
+          <colorPalette type="list">[#53A051,#DC4E41]</colorPalette>
+          <scale type="threshold">0</scale>
+        </format>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20type%3Dcom.oraclecloud.loadbalancer.error%20%60oci_trim%60%20$tenantid$%20$compartmentid$%20$source$%0A%7C%20stats%20count%20sparkline(count)%20as%20trend%20by%20tenant_shortname%20compartment_shortname%20oci_source%20errorLog.type%20errorLog.errorDetails%0A%7C%20rename%20tenant_shortname%20as%20tenant%20compartment_shortname%20as%20compartment%20errorLog.type%20as%20%22error%20type%22%20errorLog.errorDetails%20as%20%22Error%20Details%22%20oci_source%20as%20%22LB%20Name%22&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Load Balancer Performance</title>
+        <search>
+          <query>
+            <![CDATA[
+            `oci_index` type=com.oraclecloud.loadbalancer.access $tenantid$ $compartmentid$ $source$ `oci_trim`
+            | eval backendAddr=if(isnull(trim(backendAddr)) OR backendAddr="","NA",backendAddr)
+            | eval backendStatusCode=if(isnull(trim(backendStatusCode)) OR backendStatusCode="","NA",backendStatusCode)
+            | eval lbstatus=case(lbStatusCode==200,"GOOD",lbStatusCode>=300 AND lbStatusCode<400,"REDIRECT",lbStatusCode>=400 AND lbStatusCode<500,"400ERROR",lbStatusCode>=500 AND lbStatusCode<600,"500ERROR", 1=1,"OTHER")
+            | eval lberrorstatus =if(lbstatus LIKE "%ERROR","ERROR","GOOD")
+            | bin _time span=30m
+            | stats sparkline(count) as "request trend" count as requests sparkline(avg(requestProcessingTime)) as "LB ProcessingTime" avg(requestProcessingTime) as "avg_LB_Processing_Time" max(requestProcessingTime) as "max LB Processing Time" sparkline(avg(backendConnectTime)) as "Backend Connection Time Trend" avg(backendConnectTime) as "avg_Backend_Connection_Time" sparkline(avg(backendProcessingTime)) as "Backend Processing Time Trend" avg(backendProcessingTime) as "avg_Backend_Processing_Time" sum(receivedBytes) as sum_receivedMBytes sum(sentBytes) as sum_sentMBytes
+              by oci_source lberrorstatus
+            | eval "avg LB Processing Time"=round(avg_LB_Processing_Time,3)
+            | eval "avg Backend Processing Time"=round(avg_Backend_Processing_Time,3)
+            | eval "avg Backend Connection Time"=round(avg_Backend_Connection_Time,3)
+            | eval "Data In(MB)"=round(sum_receivedMBytes/1024,1)
+            | eval "Data Out(MB)"=round(sum_sentMBytes/1024,1)
+            | fields - sum_sentMBytes, sum_receivedMBytes, avg_*
+            |rename oci_source as "Load Balancer", lberrorstatus as "Result"
+            ]]>
+          </query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20type%3Dcom.oraclecloud.loadbalancer.access%20$tenantid$%20$compartmentid$%20$source$%20%60oci_trim%60%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20backendAddr%3Dif(isnull(trim(backendAddr))%20OR%20backendAddr%3D%22%22%2C%22NA%22%2CbackendAddr)%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20backendStatusCode%3Dif(isnull(trim(backendStatusCode))%20OR%20backendStatusCode%3D%22%22%2C%22NA%22%2CbackendStatusCode)%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20lbstatus%3Dcase(lbStatusCode%3D%3D200%2C%22GOOD%22%2ClbStatusCode%3E%3D300%20AND%20lbStatusCode%3C400%2C%22REDIRECT%22%2ClbStatusCode%3E%3D400%20AND%20lbStatusCode%3C500%2C%22400ERROR%22%2ClbStatusCode%3E%3D500%20AND%20lbStatusCode%3C600%2C%22500ERROR%22%2C%201%3D1%2C%22OTHER%22)%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20lberrorstatus%20%3Dif(lbstatus%20LIKE%20%22%25ERROR%22%2C%22ERROR%22%2C%22GOOD%22)%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20bin%20_time%20span%3D30m%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20stats%20sparkline(count)%20as%20%22request%20trend%22%20count%20as%20requests%20sparkline(avg(requestProcessingTime))%20as%20%22LB%20ProcessingTime%22%20avg(requestProcessingTime)%20as%20%22avg_LB_Processing_Time%22%20max(requestProcessingTime)%20as%20%22max%20LB%20Processing%20Time%22%20sparkline(avg(backendConnectTime))%20as%20%22Backend%20Connection%20Time%20Trend%22%20avg(backendConnectTime)%20as%20%22avg_Backend_Connection_Time%22%20sparkline(avg(backendProcessingTime))%20as%20%22Backend%20Processing%20Time%20Trend%22%20avg(backendProcessingTime)%20as%20%22avg_Backend_Processing_Time%22%20sum(receivedBytes)%20as%20sum_receivedMBytes%20sum(sentBytes)%20as%20sum_sentMBytes%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20by%20oci_source%20lberrorstatus%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22avg%20LB%20Processing%20Time%22%3Dround(avg_LB_Processing_Time%2C3)%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22avg%20Backend%20Processing%20Time%22%3Dround(avg_Backend_Processing_Time%2C3)%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22avg%20Backend%20Connection%20Time%22%3Dround(avg_Backend_Connection_Time%2C3)%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22Data%20In(MB)%22%3Dround(sum_receivedMBytes%2F1024%2C1)%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22Data%20Out(MB)%22%3Dround(sum_sentMBytes%2F1024%2C1)%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20fields%20-%20sum_sentMBytes%2C%20sum_receivedMBytes%2C%20avg_*%0A%20%20%20%20%20%20%20%20%20%20%20%20%7Crename%20oci_source%20as%20%22Load%20Balancer%22%2C%20lberrorstatus%20as%20%22Result%22&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <map>
+        <title>User Locations</title>
+        <search>
+          <query>`oci_index` $tenantid$ $compartmentid$ $source$ type=com.oraclecloud.loadbalancer.access `oci_trim`
+            | rex field=clientAddr "(?&lt;src_ip&gt;[^\:]+)"
+            | iplocation src_ip | geostats count by request</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="mapping.data.maxClusters">1000</option>
+        <option name="mapping.type">marker</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20$tenantid$%20$compartmentid$%20$source$%20type%3Dcom.oraclecloud.loadbalancer.access%20%60oci_trim%60%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20rex%20field%3DclientAddr%20%22(%3F%3Csrc_ip%3E%5B%5E%5C%3A%5D%2B)%22%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%7C%20iplocation%20src_ip%20%7C%20geostats%20count%20by%20request&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </map>
+    </panel>
+  </row>
+</form>

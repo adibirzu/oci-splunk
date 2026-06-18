@@ -533,6 +533,36 @@ locals {
   effective_function_id = var.enable_functions_path ? (var.existing_function_id != "" ? var.existing_function_id : try(oci_functions_function.splunk[0].id, "")) : ""
 }
 
+# VCN flow logs for the deployment subnet (only when this stack created the network).
+locals {
+  enable_vcn_flow_logs = var.create_vcn_flow_logs && local.create_network
+}
+
+resource "oci_logging_log_group" "splunk" {
+  count          = local.enable_vcn_flow_logs ? 1 : 0
+  compartment_id = var.compartment_ocid
+  display_name   = "${var.project_prefix}-loggroup"
+  description    = "Log group for OCI Splunk flow logs"
+}
+
+resource "oci_logging_log" "vcn_flow" {
+  count        = local.enable_vcn_flow_logs ? 1 : 0
+  log_group_id = oci_logging_log_group.splunk[0].id
+  display_name = "${var.project_prefix}-vcn-flow"
+  log_type     = "SERVICE"
+  is_enabled   = true
+
+  configuration {
+    compartment_id = var.compartment_ocid
+    source {
+      category    = "all"
+      resource    = local.effective_subnet_id
+      service     = "flowlogs"
+      source_type = "OCISERVICE"
+    }
+  }
+}
+
 resource "oci_sch_service_connector" "audit_to_stream" {
   count          = var.create_audit_stream_connector ? 1 : 0
   compartment_id = var.compartment_ocid
@@ -543,6 +573,15 @@ resource "oci_sch_service_connector" "audit_to_stream" {
     log_sources {
       compartment_id = local.audit_compartment
       log_group_id   = "_Audit"
+    }
+    # VCN flow logs, when enabled, ride the same connector to the stream.
+    dynamic "log_sources" {
+      for_each = local.enable_vcn_flow_logs ? [1] : []
+      content {
+        compartment_id = var.compartment_ocid
+        log_group_id   = oci_logging_log_group.splunk[0].id
+        log_id         = oci_logging_log.vcn_flow[0].id
+      }
     }
   }
 

@@ -168,6 +168,20 @@ run_as_splunk /opt/splunk/bin/splunk restart --answer-yes --no-prompt
 wait_for_port 127.0.0.1 8000 300
 wait_for_port 127.0.0.1 8088 300
 
+# Install the bundled OCI dashboards app (Audit + VCN flow), so the deployment is
+# usable out of the box. Best-effort: a failure here must not abort the boot.
+# Fork note: change the URL below if you host this project elsewhere.
+(
+  command -v git >/dev/null 2>&1 || yum install -y git >/dev/null 2>&1 || true
+  if git clone --depth 1 https://github.com/adibirzu/oci-splunk /tmp/oci-splunk-repo >/dev/null 2>&1; then
+    if [[ -d /tmp/oci-splunk-repo/splunk-app/splunk_app_oci ]]; then
+      cp -r /tmp/oci-splunk-repo/splunk-app/splunk_app_oci /opt/splunk/etc/apps/
+      chown -R splunk:splunk /opt/splunk/etc/apps/splunk_app_oci
+      run_as_splunk /opt/splunk/bin/splunk restart --answer-yes --no-prompt || true
+    fi
+  fi
+) || true
+
 %{ if stream_consumer_model == "legacy_kafka_connect" ~}
 if [[ ! -x "$KAFKA_HOME/bin/connect-standalone.sh" ]]; then
   retry 5 wget --tries=3 --timeout=30 -O "$KAFKA_ARCHIVE" "https://downloads.apache.org/kafka/$KAFKA_VERSION/kafka_$KAFKA_SCALA-$KAFKA_VERSION.tgz"

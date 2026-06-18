@@ -1,0 +1,158 @@
+<form version="1.1" script="base_page.js" theme="dark">
+  <label>OCI Function Logs</label>
+  <search id="list_functions">
+    <query>
+            <![CDATA[
+              `oci_index` earliest=1 sourcetype=com.oraclecloud.functions.application.functioninvoke `oci_trim` | top limit=50 tenantid tenant_shortname compartmentid functionId compartment_shortname function_shortname
+            ]]>
+        </query>
+  </search>
+  <fieldset submitButton="false">
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search base="list_functions">
+        <query>fields *</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentid">
+      <label>Compartmentid</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>compartmentid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentid</fieldForValue>
+      <fieldForLabel>compartment_shortname</fieldForLabel>
+      <search base="list_functions">
+        <query>fields *</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="functionId">
+      <label>Function ID</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>functionId="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>functionId</fieldForValue>
+      <fieldForLabel>function_shortname</fieldForLabel>
+      <search base="list_functions">
+        <query>fields * </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token">
+      <label>Time</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <table>
+        <title>Success/Completed Messages for $functionId$</title>
+        <search>
+          <query>`oci_index` (success* OR complete*) sourcetype=com.oraclecloud.functions.application.functioninvoke `oci_trim` | search $functionId$ | rex field=message "[\d\-\:\,\s]+(?&lt;message&gt;.*)"| stats count sparkline(count) as "trend" by message function_shortname | fields count trend message function_shortname</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <!-- Set sparkline options here; make sure that field matches field name of the search results -->
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format field="trend" type="sparkline">
+          <option name="lineColor">#5379af</option>
+          <option name="fillColor">#CCDDFF</option>
+          <option name="lineWidth">1</option>
+          <option name="maxSpotColor">#A2FFA2</option>
+          <option name="spotRadius">3</option>
+          <option name="height">25</option>
+        </format>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20(success*%20OR%20complete*)%20sourcetype%3Dcom.oraclecloud.functions.application.functioninvoke%20%60oci_trim%60%20%7C%20search%20$functionId$%20%7C%20rex%20field%3Dmessage%20%22%5B%5Cd%5C-%5C%3A%5C%2C%5Cs%5D%2B(%3F%3Cmessage%3E.*)%22%7C%20stats%20count%20sparkline(count)%20as%20%22trend%22%20by%20message%20function_shortname%20%7C%20fields%20count%20trend%20message%20function_shortname&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Error Messages for $functionId$</title>
+        <search>
+          <query>`oci_index` (error OR fail* OR *kill* OR exception) sourcetype=com.oraclecloud.functions.application.functioninvoke `oci_trim` | search $functionId$ | table _time message function_shortname</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="message">
+          <colorPalette type="expression">if (like(value,"%ERROR%"),"#FF5733","#247bc1")</colorPalette>
+        </format>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20(error%20OR%20fail*%20OR%20*kill*%20OR%20exception)%20sourcetype%3Dcom.oraclecloud.functions.application.functioninvoke%20%60oci_trim%60%20%7C%20search%20$functionId$%20%7C%20table%20_time%20message%20function_shortname&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Top messages for $functionId$</title>
+        <search>
+          <query>`oci_index` sourcetype=com.oraclecloud.functions.application.functioninvoke `oci_trim`| search $functionId$ | top limit=20 message function_shortname</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="percent">
+          <colorPalette type="minMidMax" maxColor="#5A4575" midColor="#FFFFFF" minColor="#708794"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#5A4575" midColor="#FFFFFF" minColor="#708794"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20sourcetype%3Dcom.oraclecloud.functions.application.functioninvoke%20%60oci_trim%60%7C%20search%20$functionId$%20%7C%20top%20limit%3D20%20message%20function_shortname&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Rare messages for $functionId$</title>
+        <search>
+          <query>`oci_index` sourcetype=com.oraclecloud.functions.application.functioninvoke `oci_trim` | search $functionId$ | rare limit=20 message function_shortname</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#5A4575" midColor="#FFFFFF" minColor="#708794"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <format type="color" field="percent">
+          <colorPalette type="minMidMax" maxColor="#5A4575" midColor="#FFFFFF" minColor="#708794"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_index%60%20sourcetype%3Dcom.oraclecloud.functions.application.functioninvoke%20%60oci_trim%60%20%7C%20search%20$functionId$%20%7C%20rare%20limit%3D20%20message%20function_shortname&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+</form>

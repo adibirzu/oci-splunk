@@ -22,6 +22,12 @@ This project deploys and validates an OCI logging pipeline to Splunk, with two s
   A matching IAM policy is created automatically (`manage_service_connector_policy`;
   set it to `false` if your tenancy already has a `serviceconnector` policy or is
   at its policy-statement limit).
+- **VCN flow logs out of the box** — when this stack creates the network it also
+  enables flow logs on the subnet and adds them to the same connector
+  (`create_vcn_flow_logs = true`), so network logs reach Splunk for testing.
+- **Bundled Splunk app** — a dashboards app (Audit + VCN flow) is auto-installed on
+  the managed Splunk VM, pre-wired to `index=main sourcetype=oci:log`. See
+  [`splunk-app/`](splunk-app/).
 - One stream consumer runtime:
   - `legacy_kafka_connect` (default): Kafka Connect standalone + Splunk sink connector
   - `soc4kafka` (opt-in): Splunk OTel Collector/SOC4Kafka consuming OCI Streaming directly

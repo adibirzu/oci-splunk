@@ -1,0 +1,41 @@
+<nav search_view="search" color="#FA0000">
+
+    <collection label="Security">
+      <view name="oci_audit_overview"/>
+      <view name="oci_audit_activity"/>
+      <view name="oci_cloudguard_detection_events"/>
+    </collection>
+
+    <collection label="Networking">
+      <view name="oci_vcn_flow_overview" default="true"/>
+      <view name="vcn_flow_logs__traffic_analysis"/>
+      <view name="vcn_flow_logs__security_analysis"/>
+        <divider />
+      <view name="waf_traffic_analysis"/>
+      <view name="oci_load_balancers"/>
+      <view name="oci_load_balancers_useragent_analysis"/>
+    </collection>
+
+
+     <collection label="Developer Services">
+       <view name="oci_objectstore_activity"/>
+           <divider />
+       <view name="objectstore_access_logs"/>
+           <divider />
+        <view name="oci_function_logs"/>
+        <view name="events_service"/>
+     </collection>
+
+
+    <collection label="Troubleshooting">
+  		<view name="oci_data_collection_health"/>
+    </collection>
+
+    <collection label="Search">
+        <view name="dashboards"/>
+        <view name="reports"/>
+        <view name="alerts"/>
+        <view name="search"/>
+    </collection>
+
+</nav>

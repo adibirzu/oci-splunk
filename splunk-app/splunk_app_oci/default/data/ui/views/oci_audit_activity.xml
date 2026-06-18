@@ -1,0 +1,159 @@
+<form version="1.1" script="base_page.js" theme="dark">
+  <label>OCI Audit Activity</label>
+  <search id="list_types">
+    <query>
+        |inputlookup oci_services.csv
+    </query>
+  </search>
+  <search id="type_statistics">
+    <query>
+            <![CDATA[
+              `oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | top limit=10 tenantid tenant_shortname compartmentid compartment_shortname compartmentName type type_shortname by message
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false">
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search base="list_types">
+        <query>top tenantid tenant_shortname</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentname">
+      <label>CompartmentName</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>compartmentName="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentName</fieldForValue>
+      <fieldForLabel>compartmentName</fieldForLabel>
+      <search base="list_types">
+        <query>top compartmentName | where (compartmentName != "null" AND compartmentName != "NA")</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="type">
+      <label>Log source</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>type_source="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>type_source</fieldForValue>
+      <fieldForLabel>type_source</fieldForLabel>
+      <search base="list_types">
+        <query>stats count by type_source </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token">
+      <label>Time</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel id="activitypanel">
+      <table>
+        <title>Activity for $compartmentname$ AND $type$ (CLICK ENTRY FOR MESSAGES)</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | search $type$ $tenantid$ $compartmentname$ | bin _time span=15m | stats count sparkline(count) AS trend by tenant_shortname compartmentName type_shortname  | rename *_shortname AS * | sort 0 - count</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <!-- Set sparkline options here; make sure that field matches field name of the search results -->
+        <option name="drilldown">row</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <format field="trend" type="sparkline">
+          <option name="lineColor">#5379af</option>
+          <option name="fillColor">#CCDDFF</option>
+          <option name="lineWidth">1</option>
+          <option name="maxSpotColor">#A2FFA2</option>
+          <option name="spotRadius">3</option>
+          <option name="height">25</option>
+        </format>
+        <drilldown>
+          <set token="loggroup">$row.type$</set>
+        </drilldown>
+      </table>
+    </panel>
+    <panel id="detailspanel">
+      <table depends="$loggroup$">
+        <title>Audit log details for $loggroup$</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | search $type$ $tenantid$ $compartmentname$ $loggroup$ | stats count sparkline(count) AS trend by message  | rename *_shortname AS * </query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+        <format field="trend" type="sparkline">
+          <option name="lineColor">#5379af</option>
+          <option name="fillColor">#CCDDFF</option>
+          <option name="lineWidth">1</option>
+          <option name="maxSpotColor">#A2FFA2</option>
+          <option name="spotRadius">3</option>
+          <option name="height">25</option>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel id="topmessagespanel">
+      <table>
+        <title>Top 10 messages for $type$</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | search $tenantid$ $compartmentname$ $type$ | top limit=10 type_shortname message | fields count percent type_shortname message</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Rare 10 messages for $type$</title>
+        <search>
+          <query>`oci_index` oracle.loggroupid=_audit data.message!="" `oci_trim` | search $tenantid$ $compartmentname$ $type$ | rare limit=10 type_shortname message | fields count percent type_shortname message</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</form>

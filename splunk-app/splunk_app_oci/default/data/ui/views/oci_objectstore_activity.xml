@@ -1,0 +1,268 @@
+<form version="1.1" script="base_page.js" theme="dark">
+  <label>OCI ObjectStore Activity</label>
+  <search id="list_types">
+    <query>
+        |inputlookup oci_services.csv | search type_source=objectstorage
+    </query>
+  </search>
+  <search id="os_statistics">
+    <query>
+            <![CDATA[
+              `oci_index` type=com.oraclecloud.objectstorage.* ($tenantid$ $compartmentname$ $type$) `oci_trim`
+               | rename additionalDetails.* as *
+              | rename identity.* as *
+              | rename request.headers.User-Agent{} AS userAgent
+              | eval namespace=coalesce(namespaceName,namespace)
+              | fillnull value="-" ipAddress
+              | fillnull value="-" principalName
+              | fillnull value="-" userAgent
+              | fillnull value="-" bucketName
+              | fillnull value="-" namespace
+              | stats count by type_facility message compartmentName principalName ipAddress bucketName namespace userAgent
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false" autoRun="false">
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>oracle.tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search base="list_types">
+        <query>top tenantid tenant_shortname</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentname">
+      <label>CompartmentName</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>data.compartmentName="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentName</fieldForValue>
+      <fieldForLabel>compartmentName</fieldForLabel>
+      <search base="list_types">
+        <query>top compartmentName | where (compartmentName != "null" AND compartmentName != "NA")</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="type">
+      <label>Activity Type</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>type="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>type</fieldForValue>
+      <fieldForLabel>type_facility</fieldForLabel>
+      <search base="list_types">
+        <query>stats count by type type_shortname type_facility </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token" searchWhenChanged="true">
+      <label>Time</label>
+      <default>
+        <earliest>-30d@d</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Buckets Created</title>
+        <search base="os_statistics">
+          <query>
+            search type_facility="CreateBucket" bucketName !="-" | stats dc(bucketName)
+          </query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x53a051","0xf8be34","0xdc4e41"]</option>
+        <option name="rangeValues">[5,10]</option>
+        <option name="refresh.display">preview</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Buckets Deleted</title>
+        <search base="os_statistics">
+          <query>
+            search type_facility="DeleteBucket" bucketName !="-" | stats dc(bucketName)
+          </query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x53a051","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">preview</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>External IPs</title>
+        <search base="os_statistics">
+          <query>
+            search ipAddress !="-" | stats dc(ipAddress)
+          </query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x53a051","0x006d9c"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">preview</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Unique userAgents</title>
+        <search base="os_statistics">
+          <query>
+            search userAgent !="-" | stats dc(userAgent)
+          </query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53a051","0x006d9c"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">preview</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <single>
+        <title>Count by event names</title>
+        <search base="os_statistics">
+          <query>
+            stats sum(count) by type_facility | rename type_facility as "Event Names"
+          </query>
+            <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+
+        </search>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="rangeColors">["0x53a051","0x006d9c"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="refresh.display">preview</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trellis.size">large</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+
+      </single>
+    </panel>
+    <panel>
+      <map>
+        <title>userAgents for External IP Location</title>
+        <search base="os_statistics">
+          <query>
+            search ipAddress !="-"
+            | iplocation ipAddress
+            |geostats sum(count) by userAgent
+          </query>
+                    <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+
+        </search>
+        <option name="drilldown">all</option>
+        <option name="height">452</option>
+        <option name="mapping.data.maxClusters">1000</option>
+        <option name="mapping.type">marker</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+
+      </map>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>ObjectStore Event details</title>
+        <search base="os_statistics">
+          <query>table * </query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+</form>

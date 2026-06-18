@@ -270,6 +270,12 @@ variable "audit_log_compartment_ocid" {
   default     = ""
 }
 
+variable "create_vcn_flow_logs" {
+  description = "Enable VCN flow logs on the deployment subnet and ship them to the stream (alongside Audit) so network logs reach Splunk out of the box."
+  type        = bool
+  default     = true
+}
+
 variable "manage_service_connector_policy" {
   description = "Create the IAM policy granting the Service Connector principal stream-push + read log-content (needed for the Audit connector to move data)."
   type        = bool

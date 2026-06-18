@@ -1,0 +1,549 @@
+<form version="1.1" script="base_page.js" theme="dark">
+  <label>VCN Flow Logs - Traffic Analysis</label>
+  <search id="basic_metrics">
+    <query>
+            <![CDATA[
+                `oci_vcn_summary` $vnicocid$ $subnetid$ $compartmentid$ name=$protocol$ source="dest_port"
+                | dedup _time vnicocid name action
+                | stats sum(bytes) as bytes sum(total_packets) as total_packets by vnicocid name action
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <search id="basic_src_ip">
+    <query>
+            <![CDATA[
+                `oci_vcn_summary` $vnicocid$ $subnetid$ $compartmentid$ protocolName=$protocol$ source="srcAddress"
+                | iplocation sourceAddress
+                | stats sum(bytesOut) as bytes by sourceAddress protocolName City Country Region lat lon
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <search id="basic_dest_ip">
+    <query>
+            <![CDATA[
+                `oci_vcn_summary` $vnicocid$ $subnetid$ $compartmentid$ protocolName=$protocol$ source="destAddress"
+                | stats sum(bytesOut) as bytes sum(packets) as packets by destinationAddress
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <search id="basic_dest_port">
+    <query>
+            <![CDATA[
+                `oci_vcn_summary` $vnicocid$ $subnetid$ $compartmentid$ name=$protocol$ source="dest_port"
+                | stats sum(bytes) as bytes sum(packets) as packets by dest_port
+            ]]>
+        </query>
+    <earliest>$time_token.earliest$</earliest>
+    <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false" autoRun="false">
+    <input type="multiselect" token="realm" searchWhenChanged="true">
+      <label>OCI Realm</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>realm="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>realm</fieldForLabel>
+      <fieldForValue>realm</fieldForValue>
+      <search>
+        <query>
+          | inputlookup oci_vcn_ids.csv
+          | stats count by realm
+        </query>
+      </search>
+      <default>oc1</default>
+    </input>
+    <input type="multiselect" token="region" searchWhenChanged="true">
+      <label>Region</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>region="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>region</fieldForLabel>
+      <fieldForValue>region</fieldForValue>
+      <search>
+        <query>
+          | inputlookup oci_vcn_ids.csv
+          | search $realm$
+          | stats count by region
+        </query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search>
+        <query>
+          | inputlookup oci_vcn_ids.csv
+          | search $realm$ $region$
+          |stats count by tenantid tenant_shortname
+        </query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentid">
+      <label>Compartment ID</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>compartmentid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentid</fieldForValue>
+      <fieldForLabel>compartment_shortname</fieldForLabel>
+      <search>
+        <query>
+               | inputlookup oci_vcn_ids.csv
+               | search $tenantid$
+               | stats count by compartmentid compartment_shortname
+        </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="subnetid">
+      <label>Subnetid</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>vnicsubnetocid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>vnicsubnetocid</fieldForValue>
+      <fieldForLabel>subnet_shortname</fieldForLabel>
+      <search>
+        <query>
+               | inputlookup oci_vcn_ids.csv
+               | search $tenantid$ $compartmentid$
+               | stats count by vnicsubnetocid subnet_shortname
+        </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="vnicocid">
+      <label>Virtual NIC</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>vnicocid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>vnicocid</fieldForValue>
+      <fieldForLabel>ocid_shortname</fieldForLabel>
+      <search>
+        <query>
+          | inputlookup oci_vcn_ids.csv
+          | search $subnetid$ $tenantid$ $compartmentid$
+          | stats count by vnicocid ocid_shortname
+        </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="dropdown" searchWhenChanged="true" token="protocol">
+      <label>Protocol</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <fieldForValue>protocol</fieldForValue>
+      <fieldForLabel>protocol</fieldForLabel>
+      <search>
+        <query>`oci_vcn_summary` source="dest_port" $vnicocid$ $subnetid$ $compartmentid$ | stats count by name | rename name AS protocol</query>
+        <earliest>$time_token.earliest$</earliest>
+        <latest>$time_token.latest$</latest>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" searchWhenChanged="true" token="time_token">
+      <label>Time Range</label>
+      <default>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Monitored Interfaces</title>
+        <search base="basic_metrics">
+          <query>
+            stats dc(vnicocid) as "Virtual Interfaces"
+          </query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="field">interfaces</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x555","0xd93f3c"]</option>
+        <option name="rangeValues">[50]</option>
+        <option name="refresh.display">preview</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">auto</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                            search?q=search `oci_vcn_logs` `oci_trim`
+                            | search ($vnicocid$, protocolName=$protocol$, $action$)
+                            | stats count by vncicocid subnetid region
+                            | table vnicocid subnetid region&earliest=$earliest$&latest=$latest$
+                        ]]>
+          </link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Traffic Protocols</title>
+        <search base="basic_metrics">
+          <query>
+               |stats dc(name) as protocols
+          </query>
+        </search>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                            search?q=search `oci_vcn_logs` `oci_trim`
+                            | search ($vnicocid$, protocolName=$protocol$, $action$)
+                            | stats count by protocolName vnicocid
+                            | table vnicocid protocolName&earliest=$earliest$&latest=$latest$
+                        ]]>
+          </link>
+        </drilldown>
+        <option name="field">protocols</option>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x555","0x555"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">auto</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>All Traffic (GB)</title>
+        <search base="basic_metrics">
+          <query>
+                        | stats sum(bytes) as total_bytes
+                        | eval GB=round(total_bytes/1024/1024/1024,2)
+                        | fields GB
+          </query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="drilldown">all</option>
+        <option name="numberPrecision">0.00</option>
+        <option name="rangeColors">["0x6db7c6","0x65a637"]</option>
+        <option name="rangeValues">[400000]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">auto</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_vcn_summary%60%20$vnicocid$%20$subnetid$%20$compartmentid$%20name%3D$protocol$%20source%3D%22dest_port%22%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20dedup%20_time%20vnicocid%20name%20action%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20stats%20sum(bytes)%20as%20bytes%20sum(total_packets)%20as%20total_packets%20by%20vnicocid%20name%20action%20%7C%20%20stats%20sum(bytes)%20as%20total_bytes%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20GB%3Dround(total_bytes%2F1024%2F1024%2F1024%2C2)%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20fields%20GB&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Traffic Destinations</title>
+        <search base="basic_dest_ip">
+          <query>
+              | stats dc(destinationAddress) as dest_ips
+          </query>
+        </search>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                            search?q=search `oci_vcn_logs` `oci_trim` | search ($vnicocid$, protocolName=$protocol$, $action$)
+                            | stats count as Packages by destinationAddress
+                            | iplocation destinationAddress
+                            | table destinationAddress Country Region City Packages
+                            | sort -Packages&earliest=$earliest$&latest=$latest$
+                        ]]>
+          </link>
+        </drilldown>
+        <option name="field">dest_ips</option>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x65a637","0x6db7c6","0xf7bc38","0xf58f39","0xd93f3c"]</option>
+        <option name="rangeValues">[0,2,40,100]</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">auto</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Traffic Sources</title>
+        <search base="basic_src_ip">
+          <query>
+                        | stats dc(sourceAddress) as src_ips
+          </query>
+        </search>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                            search?q=search `oci_vcn_logs` `oci_trim` | search ($vnicocid$, protocolName=$protocol$, $action$)
+                            | stats count as Packages by sourceAddress
+                            | iplocation sourceAddress
+                            | table sourceAddress Country Region City Packages
+                            | sort -Packages&earliest=$earliest$&latest=$latest$
+                        ]]>
+          </link>
+        </drilldown>
+        <option name="field">src_ips</option>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x65a637","0x6db7c6","0xf58f39","0xd93f3c"]</option>
+        <option name="rangeValues">[2000,3000,4000]</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">auto</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <single>
+        <title>Traffic Over Time by Interface (Top 5)</title>
+        <search>
+          <query>`oci_vcn_summary` source="dest_port" name=$protocol$ $vnicocid$ $subnetid$ $compartmentid$
+                        | dedup _time vnicocid name
+                        | rex field=vnicocid "([^\.]+\.){3}(?&lt;vnic&gt;.*)"
+                        | timechart sum(eval(round(bytes/1024/1024,2))) as MB by vnic limit=5 useother=f</query>
+          <earliest>$earliest$</earliest>
+          <latest>$latest$</latest>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="numberPrecision">0.00</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trellis.scales.shared">0</option>
+        <option name="trellis.size">large</option>
+        <option name="trellis.splitBy">vnicocid</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unit">MB</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_vcn_summary%60%20source%3D%22dest_port%22%20name%3D$protocol$%20$vnicocid$%20$subnetid$%20$compartmentid$%20%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20dedup%20_time%20vnicocid%20name%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20rex%20field%3Dvnicocid%20%22(%5B%5E%5C.%5D%2B%5C.)%7B3%7D(%3F%3Cvnic%3E.*)%22%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20timechart%20sum(eval(round(bytes%2F1024%2F1024%2C2)))%20as%20MB%20by%20vnic%20limit%3D5%20useother%3Df&amp;earliest=$earliest$&amp;latest=$latest$</link>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <map>
+        <title>Traffic Size by Protocol and Location</title>
+        <search base="basic_src_ip">
+          <query>geostats sum(bytes) by protocolName</query>
+        </search>
+        <option name="drilldown">all</option>
+        <option name="height">300</option>
+        <option name="mapping.choroplethLayer.colorBins">5</option>
+        <option name="mapping.choroplethLayer.colorMode">auto</option>
+        <option name="mapping.choroplethLayer.maximumColor">0xDB5800</option>
+        <option name="mapping.choroplethLayer.minimumColor">0x2F25BA</option>
+        <option name="mapping.choroplethLayer.neutralPoint">0</option>
+        <option name="mapping.choroplethLayer.shapeOpacity">0.75</option>
+        <option name="mapping.choroplethLayer.showBorder">1</option>
+        <option name="mapping.data.maxClusters">100</option>
+        <option name="mapping.fieldColors">{REJECT:0xd93f3c,ACCEPT:0x65a637}</option>
+        <option name="mapping.map.panning">1</option>
+        <option name="mapping.map.scrollZoom">0</option>
+        <option name="mapping.markerLayer.markerMaxSize">50</option>
+        <option name="mapping.markerLayer.markerMinSize">10</option>
+        <option name="mapping.markerLayer.markerOpacity">0.8</option>
+        <option name="mapping.showTiles">1</option>
+        <option name="mapping.tileLayer.maxZoom">7</option>
+        <option name="mapping.tileLayer.minZoom">0</option>
+        <option name="mapping.tileLayer.tileOpacity">1</option>
+        <option name="mapping.type">marker</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                            search?q=`oci_vcn_logs` action=$action$ name=$protocol$ vnicocid$
+                            | stats sum(bytes) as Bytes by sourceAddress protocol
+                            | iplocation sourceAddress
+                            | search lat>=$click.bounds.south$ lat<$click.bounds.north$ lon>=$click.bounds.west$ lon<$click.bounds.east$
+                            | stats sum(Bytes) as Bytes by sourceAddress Country City Region lat lon protocol
+                            | sort -Bytes&earliest=$earliest$&latest=$latest$
+                        ]]>
+          </link>
+        </drilldown>
+      </map>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Top Destination Addresses</title>
+        <search base="basic_dest_ip">
+          <query>
+                        stats sum(bytes) as bytes by destinationAddress
+                        | sort 10 -bytes
+                        | eval "Size (MB)" = round(bytes/1024/1204,2)
+                        | fields - bytes
+                    </query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">minmax</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_vcn_summary%60%20$vnicocid$%20$subnetid$%20$compartmentid$%20protocolName%3D$protocol$%20source%3D%22destAddress%22%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20stats%20sum(bytesOut)%20as%20bytes%20sum(packets)%20as%20packets%20by%20destinationAddress%20%7C%20stats%20sum(bytes)%20as%20bytes%20by%20destinationAddress%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20sort%2010%20-bytes%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22Size%20(MB)%22%20%3D%20round(bytes%2F1024%2F1204%2C2)%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20fields%20-%20bytes&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Top Source Addresses</title>
+        <search base="basic_src_ip">
+          <query>
+                        | stats sum(bytes) as bytes by sourceAddress
+                        | sort 10 -bytes
+                        | eval "Size (MB)" = round(bytes/1024/1204,2)
+                        | fields - bytes
+          </query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">minmax</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <link target="_blank">
+            <![CDATA[
+                        search?q=`oci_vcn_summary` $vnicocid$ $subnetid$ $compartmentid$ protocolName=$protocol$ source="srcAddress"
+                | iplocation sourceAddress
+                | stats sum(bytesOut) as bytes by sourceAddress protocolName City Country Region lat lon |  stats sum(bytes) as bytes by sourceAddress
+                        | sort 10 -bytes
+                        | eval "Size (MB)" = round(bytes/1024/1204,2)
+                        | fields - bytes
+                        &earliest=$time_token.earliest$&latest=$time_token.latest$
+                        ]]>
+          </link>
+        </drilldown>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Top Destination Ports</title>
+        <search base="basic_dest_port">
+          <query>
+                        | sort 10 -bytes
+                        | eval "Size (MB)" = round(bytes/1024/1204,2)
+                        | fields - bytes
+                        | rename dest_port as "Destination Port"
+          </query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">bar</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.placement">none</option>
+        <drilldown>
+          <link target="_blank">search?q=%60oci_vcn_summary%60%20$vnicocid$%20$subnetid$%20$compartmentid$%20name%3D$protocol$%20source%3D%22dest_port%22%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20stats%20sum(bytes)%20as%20bytes%20sum(packets)%20as%20packets%20by%20dest_port%20%7C%20%20sort%2010%20-bytes%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20eval%20%22Size%20(MB)%22%20%3D%20round(bytes%2F1024%2F1204%2C2)%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20fields%20-%20bytes%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7C%20rename%20dest_port%20as%20%22Destination%20Port%22&amp;earliest=$time_token.earliest$&amp;latest=$time_token.latest$</link>
+        </drilldown>
+      </chart>
+    </panel>
+  </row>
+</form>

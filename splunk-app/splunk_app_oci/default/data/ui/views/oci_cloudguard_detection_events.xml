@@ -1,0 +1,170 @@
+<form version="1.1" theme="dark">
+  <label>OCI Cloud Guard Detection Events</label>
+  <search id="list_types">
+    <query>
+        |inputlookup oci_services.csv
+    </query>
+  </search>
+  <search id="type_statistics">
+    <query>
+            <![CDATA[
+              `oci_index` |search id="*cloudguardproblem*" `oci_trim` | top limit=10 tenantid tenant_shortname compartmentid compartment_shortname compartmentName type type_shortname by risk_level
+            ]]>
+        </query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+  </search>
+  <fieldset submitButton="false">
+    <input type="multiselect" token="tenantid" searchWhenChanged="true">
+      <label>OCI Tenant ID</label>
+      <choice value="*">All</choice>
+      <prefix> (</prefix>
+      <suffix>) </suffix>
+      <valuePrefix>tenantid="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> OR </delimiter>
+      <fieldForLabel>tenant_shortname</fieldForLabel>
+      <fieldForValue>tenantid</fieldForValue>
+      <search>
+        <query>top tenantid tenant_shortname</query>
+      </search>
+      <default>*</default>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="compartmentname">
+      <label>Compartment Name</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>compartmentName="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>compartmentName</fieldForValue>
+      <fieldForLabel>compartmentName</fieldForLabel>
+      <search>
+        <query>top compartmentName | where (compartmentName != "null" AND compartmentName != "NA")</query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="multiselect" searchWhenChanged="true" token="type">
+      <label>Resource Type</label>
+      <choice value="*">All</choice>
+      <default>*</default>
+      <delimiter> OR </delimiter>
+      <prefix>(</prefix>
+      <suffix>)</suffix>
+      <valuePrefix>resourceType="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <fieldForValue>resource_name</fieldForValue>
+      <fieldForLabel>resource_type</fieldForLabel>
+      <search>
+        <query>stats count by resoure_type </query>
+      </search>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="time" token="time_token" searchWhenChanged="true">
+      <label>Time</label>
+      <default>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Cloud Guard Risk Level Categories</title>
+        <search>
+          <query>`oci_index` | search id="*cloudguardproblem*"| stats count by risk_level</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="colorBy">trend</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">all</option>
+        <option name="height">452</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">preview</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trellis.size">large</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="useColors">1</option>
+        <drilldown>
+                    <set token="selected_value">$trellis.value$</set>
+                    <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$</link>
+        </drilldown>
+
+
+      </single>
+    </panel>
+    <panel>
+      <table>
+        <title>Cloud Guard Detection Event details</title>
+        <search>
+          <query>`oci_index` | search id="*cloudguardproblem*"| table time_first_detected, risk_level, detector_rule_id| head 20|</query>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+        <option name="refresh.display">preview</option>
+        <format type="color" field="count">
+          <colorPalette type="minMidMax" maxColor="#B6C75A" midColor="#FFFFFF" minColor="#294E70"></colorPalette>
+          <scale type="minMidMax" midType="percentile" midValue="50"></scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+        <style>
+         .facet-label{
+          font-size:20px !important;
+          font-weight: bold !important;
+          }
+        </style>
+      </html>
+      <single>
+        <title>Problem Message Trends</title>
+        <search>
+          <query> `oci_index` | search id="*cloudguardproblem*" `oci_trim` | search $tenantid$ $compartmentname$| timechart limit=25 count by detector_rule_id usenull=f</query>
+          <earliest>$time_token.earliest$</earliest>
+          <latest>$time_token.latest$</latest>
+          <done>
+            <set token="srch">$job.search$</set>
+            <set token="earliest_time">$job.earliestTime$</set>
+            <set token="latest_time">$job.latestTime$</set>
+            <set token="sid">$job.sid$</set>
+          </done>
+        </search>
+          <option name="drilldown">all</option>
+          <option name="colorBy">trend</option>
+        <option name="colorMode">block</option>
+        <option name="height">493</option>
+        <option name="rangeColors">["0xdc4e41","0xf1813f","0xf8be34","0x0877a6","0x53a051"]</option>
+        <option name="refresh.display">preview</option>
+        <option name="trellis.size">small</option>
+        <option name="trellis.enabled">1</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="trendColorInterpretation">inverse</option>
+        <option name="useColors">1</option>
+        <drilldown>
+          <link target="_blank">search?q=$srch$&amp;earliest=$earliest_time$&amp;latest=$latest_time$&amp;sid=$job.sid$&amp;display.page.search.mode=smart&amp;workload_pool=&amp;display.page.search.tab=statistics&amp;display.general.type=statistics</link>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+</form>

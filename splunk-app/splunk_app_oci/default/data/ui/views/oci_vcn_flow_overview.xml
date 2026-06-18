@@ -1,0 +1,104 @@
+<form version="1.1" theme="dark">
+  <label>VCN Flow Logs - Overview (OOTB)</label>
+  <description>VCN flow logs straight from raw oci:log events (no summary index required). Works out of the box with this project's ingestion.</description>
+  <fieldset submitButton="false">
+    <input type="time" token="tr">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="addr">
+      <label>Address filter (src or dest, blank = all)</label>
+      <default>*</default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Total flows</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Rejected flows</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats count</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="rangeColors">["0x53a051","0xdc4e41"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Distinct source addresses</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | stats dc(sourceAddress)</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Accepted vs rejected over time</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | timechart count by action</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Top rejected source addresses</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` action=REJECT (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 sourceAddress</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Top destination ports</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | top limit=10 destinationPort</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Recent flows</title>
+        <search>
+          <query>`oci_vcn_logs` `oci_trim` (sourceAddress="$addr$" OR destinationAddress="$addr$") | table _time action sourceAddress sourcePort destinationAddress destinationPort protocolName bytesOut packets | sort - _time</query>
+          <earliest>$tr.earliest$</earliest>
+          <latest>$tr.latest$</latest>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+</form>

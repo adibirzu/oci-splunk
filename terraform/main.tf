@@ -103,6 +103,17 @@ resource "oci_core_vcn" "splunk" {
   display_name   = "${var.project_prefix}-vcn"
 }
 
+resource "oci_core_default_security_list" "splunk" {
+  count                      = local.create_network ? 1 : 0
+  manage_default_resource_id = oci_core_vcn.splunk[0].default_security_list_id
+
+  egress_security_rules {
+    destination      = "0.0.0.0/0"
+    destination_type = "CIDR_BLOCK"
+    protocol         = "all"
+  }
+}
+
 resource "oci_core_internet_gateway" "splunk" {
   count          = local.create_network ? 1 : 0
   compartment_id = var.compartment_ocid

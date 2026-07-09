@@ -366,6 +366,16 @@ create_network() {
     --query 'data.id' --raw-output)"
   CREATED_VCN="true"
 
+  local default_sl_ocid
+  default_sl_ocid="$(oci network vcn get \
+    --vcn-id "${VCN_OCID}" \
+    --query 'data."default-security-list-id"' --raw-output)"
+  oci network security-list update \
+    --security-list-id "${default_sl_ocid}" \
+    --egress-security-rules '[{"destination":"0.0.0.0/0","destinationType":"CIDR_BLOCK","protocol":"all"}]' \
+    --ingress-security-rules '[]' \
+    --force >/dev/null
+
   IGW_OCID="$(oci network ig create \
     --compartment-id "${COMPARTMENT_OCID}" \
     --vcn-id "${VCN_OCID}" \
